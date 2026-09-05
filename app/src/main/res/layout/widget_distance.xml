@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/bg_distance_widget"
+    android:clipChildren="true">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Static Map Image -->
+        <ImageView
+            android:id="@+id/widgetMapImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:src="@drawable/img_map_bg" />
+            
+        <ImageView
+            android:id="@+id/widgetIcon"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_location_pin"
+            android:tint="#FF5C81" />
+
+        <ImageView
+            android:id="@+id/widgetRefresh"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="8dp"
+            android:background="@drawable/bg_distance_overlay"
+            android:padding="6dp"
+            android:src="@drawable/ic_refresh"
+            android:tint="#2D2036" />
+    </FrameLayout>
+
+    <!-- Bottom White Info Card -->
+    <LinearLayout
+        android:id="@+id/distanceOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FFFFFF"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:id="@+id/widgetTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Distance apart"
+            android:textColor="#555555"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widgetDistance"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Calculating..."
+            android:textColor="#2D2036"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</LinearLayout>

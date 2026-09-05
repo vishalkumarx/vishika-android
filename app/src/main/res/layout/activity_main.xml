@@ -1,0 +1,824 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/apk/res-tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_gradient_pink"
+    tools:context=".MainActivity">
+
+    <!-- Top Section -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/topBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="24dp"
+        android:paddingBottom="24dp"
+        android:paddingTop="56dp"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- App Logo -->
+        <ImageView
+            android:id="@+id/appLogo"
+            android:layout_width="160dp"
+            android:layout_height="54dp"
+            android:src="@drawable/app_logo"
+            android:scaleType="fitStart"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/statusContainer" />
+
+        <!-- Status Indicator -->
+        <LinearLayout
+            android:id="@+id/statusContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp"
+            app:layout_constraintTop_toBottomOf="@id/appLogo"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent">
+            
+            <View
+                android:id="@+id/statusDot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="#FF0000" />
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Checking status..."
+                android:textSize="13sp"
+                android:textColor="#1A1A2E"
+                android:textStyle="bold"
+                android:layout_marginStart="6dp"/>
+        </LinearLayout>
+
+        <!-- Day Pill -->
+        <com.example.vishika.BoldTextView
+            android:id="@+id/dayPill"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_pill_day"
+            android:drawableStart="@drawable/ic_flame"
+            android:drawablePadding="8dp"
+            android:fontFamily="@font/fredoka"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="8dp"
+            android:text="Day 12"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            app:layout_constraintBottom_toBottomOf="@id/appLogo"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="@id/appLogo" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Content -->
+    <ScrollView
+        android:id="@+id/mainScrollView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:clipToPadding="false"
+        android:paddingBottom="100dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/topBar">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="24dp">
+
+            <!-- Distance Card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:orientation="vertical"
+                android:background="@drawable/bg_distance_widget"
+                android:clipChildren="true"
+                android:clipToOutline="true">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="220dp">
+                    
+                    <!-- Live Google Map -->
+                    <androidx.fragment.app.FragmentContainerView
+                        android:id="@+id/mapFragment"
+                        android:name="com.google.android.gms.maps.SupportMapFragment"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent" />
+
+                    <!-- Top Right Refresh Button -->
+                    <ImageView
+                        android:id="@+id/btnRefreshMap"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_gravity="top|end"
+                        android:layout_margin="12dp"
+                        android:background="@drawable/bg_distance_overlay"
+                        android:padding="8dp"
+                        android:src="@drawable/ic_refresh"
+                        android:elevation="4dp"
+                        android:clickable="true"
+                        android:focusable="true" />
+                </FrameLayout>
+
+                <!-- Bottom Distance Info -->
+                <LinearLayout
+                    android:id="@+id/distanceOverlay"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="#FFFFFF"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                    
+                    <com.example.vishika.BoldTextView
+                        android:id="@+id/textDistanceValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:drawableStart="@drawable/ic_location_pin"
+                        android:drawablePadding="6dp"
+                        android:text="Distance apart: Calculating..."
+                        android:textColor="#2D2036"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                        
+                    <TextView
+                        android:id="@+id/textLocationStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Locating partner..."
+                        android:textColor="#555555"
+                        android:textSize="14sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Daily Photo Section -->
+            <com.example.vishika.BoldTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/fredoka"
+                android:text="Daily Locket"
+                android:textColor="#2D2036"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <!-- Locket Card -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_card_pink"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:weightSum="2"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <!-- My Photo Slot -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginEnd="6dp">
+
+                        <FrameLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="160dp">
+                            <ImageView
+                                android:id="@+id/imgMyLocket"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:scaleType="center"
+                                android:background="@drawable/bg_button_answer"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:src="@drawable/ic_photo_placeholder" />
+                                
+                            <ImageView
+                                android:id="@+id/btnUploadMyLocket"
+                                android:layout_width="32dp"
+                                android:layout_height="32dp"
+                                android:layout_gravity="bottom|end"
+                                android:layout_margin="8dp"
+                                android:background="@drawable/bg_button_answer"
+                                android:padding="6dp"
+                                android:src="@drawable/ic_edit"
+                                android:elevation="2dp"
+                                android:clickable="true"
+                                android:focusable="true" />
+                        </FrameLayout>
+
+                        <com.example.vishika.BoldTextView
+                            android:id="@+id/txtMyLocketLabel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="My Photo"
+                            android:textColor="#2D2036"
+                            android:textSize="13sp"
+                            android:gravity="center"
+                            android:layout_marginTop="6dp" />
+
+                        <com.example.vishika.BoldTextView
+                            android:id="@+id/txtMyLocketTimer"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="No Photo"
+                            android:textColor="#888888"
+                            android:textSize="11sp"
+                            android:gravity="center" />
+                    </LinearLayout>
+
+                    <!-- Partner Photo Slot -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginStart="6dp">
+
+                        <ImageView
+                            android:id="@+id/imgPartnerLocket"
+                            android:layout_width="match_parent"
+                            android:layout_height="160dp"
+                            android:scaleType="center"
+                            android:background="@drawable/bg_button_answer"
+                            android:src="@drawable/ic_photo_placeholder" />
+
+                        <com.example.vishika.BoldTextView
+                            android:id="@+id/txtPartnerLocketLabel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Her Photo"
+                            android:textColor="#2D2036"
+                            android:textSize="13sp"
+                            android:gravity="center"
+                            android:layout_marginTop="6dp" />
+
+                        <com.example.vishika.BoldTextView
+                            android:id="@+id/txtPartnerLocketTimer"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Waiting..."
+                            android:textColor="#888888"
+                            android:textSize="11sp"
+                            android:gravity="center" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <com.example.vishika.BoldTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/fredoka"
+                android:text="Send a Mood"
+                android:textColor="#2D2036"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <!-- Mood Card -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="24dp"
+                android:background="@drawable/bg_card_pink"
+                android:padding="20dp">
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none"
+                    android:fillViewport="true"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <LinearLayout
+                        android:id="@+id/moodContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:paddingHorizontal="4dp">
+                        
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+                        
+                        <TextView
+                            android:id="@+id/moodHeart"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:layout_marginHorizontal="4dp"
+                            android:text="❤️"
+                            android:textSize="32sp"
+                            android:gravity="center"
+                            android:background="@drawable/bg_button_answer"
+                            android:clickable="true"
+                            android:focusable="true"/>
+                            
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+                            
+                        <TextView
+                            android:id="@+id/moodPlead"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:layout_marginHorizontal="4dp"
+                            android:text="🥺"
+                            android:textSize="32sp"
+                            android:gravity="center"
+                            android:background="@drawable/bg_button_answer"
+                            android:clickable="true"
+                            android:focusable="true"/>
+                            
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+                            
+                        <TextView
+                            android:id="@+id/moodKiss"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:layout_marginHorizontal="4dp"
+                            android:text="😘"
+                            android:textSize="32sp"
+                            android:gravity="center"
+                            android:background="@drawable/bg_button_answer"
+                            android:clickable="true"
+                            android:focusable="true"/>
+                            
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+                            
+                        <TextView
+                            android:id="@+id/moodBite"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:layout_marginHorizontal="4dp"
+                            android:text="🫦"
+                            android:textSize="32sp"
+                            android:gravity="center"
+                            android:background="@drawable/bg_button_answer"
+                            android:clickable="true"
+                            android:focusable="true"/>
+                            
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+                            
+                        <TextView
+                            android:id="@+id/moodAngry"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:layout_marginHorizontal="4dp"
+                            android:text="😡"
+                            android:textSize="32sp"
+                            android:gravity="center"
+                            android:background="@drawable/bg_button_answer"
+                            android:clickable="true"
+                            android:focusable="true"/>
+                            
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+
+                        <TextView
+                            android:id="@+id/moodHug"
+                            android:layout_width="50dp"
+                            android:layout_height="50dp"
+                            android:layout_marginHorizontal="4dp"
+                            android:text="🫂"
+                            android:textSize="32sp"
+                            android:gravity="center"
+                            android:background="@drawable/bg_button_answer"
+                            android:clickable="true"
+                            android:focusable="true"/>
+                            
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <!-- Send a Sound Card -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="bottom">
+                
+                <com.example.vishika.BoldTextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/fredoka"
+                    android:text="Send a Sound"
+                    android:textColor="#2D2036"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+                    
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="swipe to see more 👉"
+                    android:textColor="#888888"
+                    android:textSize="12sp"
+                    android:layout_marginStart="8dp"
+                    android:layout_marginBottom="4dp"/>
+            </LinearLayout>
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="24dp"
+                android:background="@drawable/bg_card_pink"
+                android:padding="20dp">
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none"
+                    android:fillViewport="true"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintStart_toStartOf="parent">
+
+                    <LinearLayout
+                        android:id="@+id/soundContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:paddingHorizontal="4dp">
+                        
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+                        
+                        <ImageView
+                            android:id="@+id/soundBtn1"
+                            android:layout_width="120dp"
+                            android:layout_height="120dp"
+                            android:layout_marginHorizontal="8dp"
+                            android:src="@drawable/ic_audio_1"
+                            android:scaleType="fitCenter"
+                            android:padding="4dp"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"/>
+                            
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+                            
+                        <ImageView
+                            android:id="@+id/soundBtn2"
+                            android:layout_width="120dp"
+                            android:layout_height="120dp"
+                            android:layout_marginHorizontal="8dp"
+                            android:src="@drawable/ic_audio_2"
+                            android:scaleType="fitCenter"
+                            android:padding="4dp"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"/>
+                            
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+                            
+                        <ImageView
+                            android:id="@+id/soundBtn3"
+                            android:layout_width="120dp"
+                            android:layout_height="120dp"
+                            android:layout_marginHorizontal="8dp"
+                            android:src="@drawable/ic_audio_3"
+                            android:scaleType="fitCenter"
+                            android:padding="4dp"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:background="?android:attr/selectableItemBackgroundBorderless"/>
+                            
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <!-- Draw on Partner's Screen Banner -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="0dp"
+                app:strokeWidth="0dp">
+
+                <ImageView
+                    android:id="@+id/btnDrawForPartner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:src="@drawable/draw_banner"
+                    android:scaleType="fitXY"
+                    android:adjustViewBounds="true"
+                    android:clickable="true"
+                    android:focusable="true" />
+
+            </com.google.android.material.card.MaterialCardView>
+
+
+            <com.example.vishika.BoldTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/fredoka"
+                android:text="Walkie Talkie"
+                android:textColor="#2D2036"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <!-- Walkie Talkie Card -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_card_pink"
+                android:padding="20dp">
+
+                <LinearLayout
+                    android:id="@+id/btnPushToTalk"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_button_answer"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="24dp"
+                    android:paddingVertical="12dp"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent">
+                    
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_marginEnd="12dp"
+                        android:src="@android:drawable/ic_btn_speak_now"
+                        app:tint="#2D2036" />
+                    
+                    <com.example.vishika.BoldTextView
+                        android:id="@+id/txtPushToTalk"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/fredoka"
+                        android:text="Hold to Talk"
+                        android:textColor="#2D2036"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+
+            <com.example.vishika.BoldTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/fredoka"
+                android:text="Milestones"
+                android:textColor="#2D2036"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <!-- Together Since Card -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_card_pink"
+                android:padding="24dp">
+                
+                <ImageView
+                    android:id="@+id/imgTogetherIcon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_heart_filled"
+                    app:tint="#FF5C81"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"/>
+
+                <com.example.vishika.BoldTextView
+                    android:id="@+id/txtTogetherTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/fredoka"
+                    android:text="Since 25 June 2026"
+                    android:textColor="#2D2036"
+                    android:textSize="18sp"
+                    android:layout_marginTop="8dp"
+                    app:layout_constraintTop_toBottomOf="@id/imgTogetherIcon"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+                <com.example.vishika.BoldTextView
+                    android:id="@+id/txtTogetherDays"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/fredoka"
+                    android:text="Computing..."
+                    android:textColor="#FF5C81"
+                    android:textSize="32sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="4dp"
+                    app:layout_constraintTop_toBottomOf="@id/txtTogetherTitle"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <com.example.vishika.BoldTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/fredoka"
+                android:text="Upcoming"
+                android:textColor="#2D2036"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <!-- Birthday Countdown Card -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_card_pink"
+                android:padding="24dp">
+                
+                <ImageView
+                    android:id="@+id/imgBirthdayIcon"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_cake"
+                    app:tint="#FF5C81"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"/>
+
+                <com.example.vishika.BoldTextView
+                    android:id="@+id/txtBirthdayTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/fredoka"
+                    android:text="Partner's Birthday"
+                    android:textColor="#2D2036"
+                    android:textSize="18sp"
+                    android:layout_marginTop="8dp"
+                    app:layout_constraintTop_toBottomOf="@id/imgBirthdayIcon"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+                <com.example.vishika.BoldTextView
+                    android:id="@+id/txtBirthdayCountdown"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/fredoka"
+                    android:text="Loading..."
+                    android:textColor="#FF5C81"
+                    android:textSize="32sp"
+                    android:textStyle="bold"
+                    android:layout_marginTop="4dp"
+                    app:layout_constraintTop_toBottomOf="@id/txtBirthdayTitle"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="40dp"
+                android:background="@drawable/bg_card_pink"
+                android:padding="16dp">
+
+                <ImageView
+                    android:id="@+id/imgGrowOld"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:adjustViewBounds="true"
+                    android:src="@drawable/img_grow_old"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+                <com.example.vishika.BoldTextView
+                    android:id="@+id/txtGrowOld"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/fredoka"
+                    android:text="The goal is to grow old with you."
+                    android:textColor="#2D2036"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:layout_marginTop="16dp"
+                    app:layout_constraintTop_toBottomOf="@id/imgGrowOld"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Bottom Navigation Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="70dp"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="32dp"
+        android:background="@drawable/bg_bottom_nav"
+        android:elevation="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <FrameLayout
+            android:id="@+id/navHome"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+            <ImageView
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_button_answer"
+                android:padding="14dp"
+                android:src="@drawable/ic_home"
+                app:tint="#FF5C81"/>
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/navFeed"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_feed"
+                app:tint="#FFFFFF"/>
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/navProfile"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_user"
+                app:tint="#FFFFFF" />
+        </FrameLayout>
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

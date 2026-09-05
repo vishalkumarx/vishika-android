@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/apk/res-tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_gradient_pink"
+    tools:context=".ProfileActivity">
+
+    <!-- Top Bar -->
+    <LinearLayout
+        android:id="@+id/topBarProfile"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="24dp"
+        android:paddingBottom="24dp"
+        android:paddingTop="56dp"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toTopOf="parent">
+        
+
+
+        <com.example.vishika.BoldTextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="@font/fredoka"
+            android:text="Our Profiles"
+            android:textColor="#FFFFFF"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:layout_marginEnd="32dp"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/topBarProfile"
+        app:layout_constraintBottom_toTopOf="@+id/bottomNavProfile">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <!-- Vishal's Profile Card -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="8dp"
+                app:cardBackgroundColor="#FFFFFF">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="24dp">
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+                        
+                        <com.example.vishika.BoldTextView
+                            android:id="@+id/tvNameVishal"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentStart="true"
+                            android:layout_centerVertical="true"
+                            android:text="Vishal"
+                            android:textColor="#2D2036"
+                            android:textSize="24sp"
+                            android:textStyle="bold" />
+                            
+                        <ImageView
+                            android:id="@+id/btnEditVishal"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:layout_alignParentEnd="true"
+                            android:layout_centerVertical="true"
+                            android:padding="8dp"
+                            android:background="@drawable/bg_distance_overlay"
+                            android:src="@drawable/ic_edit" />
+                    </RelativeLayout>
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="120dp"
+                        android:layout_height="120dp"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginTop="16dp"
+                        app:cardCornerRadius="60dp"
+                        app:cardElevation="0dp"
+                        app:cardBackgroundColor="#EEEEEE">
+                        
+                        <ImageView
+                            android:id="@+id/imgVishal"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:scaleType="centerCrop"
+                            android:src="@drawable/ic_user" />
+                    </androidx.cardview.widget.CardView>
+                    
+                    <TextView
+                        android:id="@+id/tvBioVishal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="Loading bio..."
+                        android:textColor="#555555"
+                        android:textSize="16sp" />
+                        
+                    <com.example.vishika.BoldTextView
+                        android:id="@+id/tvNicknameVishal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Nickname: Loading..."
+                        android:textColor="#FF5C81"
+                        android:textSize="14sp"
+                        android:textStyle="bold"/>
+                        
+                    <com.example.vishika.BoldTextView
+                        android:id="@+id/tvDobVishal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="DOB: Loading..."
+                        android:textColor="#FF5C81"
+                        android:textSize="14sp"
+                        android:textStyle="bold"/>
+                        
+                    <com.example.vishika.BoldTextView
+                        android:id="@+id/tvAnniversaryVishal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Anniversary: Loading..."
+                        android:textColor="#FF5C81"
+                        android:textSize="14sp"
+                        android:textStyle="bold"/>
+
+
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- Rashika's Profile Card -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                app:cardCornerRadius="24dp"
+                app:cardElevation="8dp"
+                app:cardBackgroundColor="#FFFFFF">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="24dp">
+
+                    <RelativeLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+                        
+                        <com.example.vishika.BoldTextView
+                            android:id="@+id/tvNameRashika"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_alignParentStart="true"
+                            android:layout_centerVertical="true"
+                            android:text="Rashika"
+                            android:textColor="#2D2036"
+                            android:textSize="24sp"
+                            android:textStyle="bold" />
+                            
+                        <ImageView
+                            android:id="@+id/btnEditRashika"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:layout_alignParentEnd="true"
+                            android:layout_centerVertical="true"
+                            android:padding="8dp"
+                            android:background="@drawable/bg_distance_overlay"
+                            android:src="@drawable/ic_edit" />
+                    </RelativeLayout>
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="120dp"
+                        android:layout_height="120dp"
+                        android:layout_gravity="center_horizontal"
+                        android:layout_marginTop="16dp"
+                        app:cardCornerRadius="60dp"
+                        app:cardElevation="0dp"
+                        app:cardBackgroundColor="#EEEEEE">
+                        
+                        <ImageView
+                            android:id="@+id/imgRashika"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:scaleType="centerCrop"
+                            android:src="@drawable/ic_user" />
+                    </androidx.cardview.widget.CardView>
+                    
+                    <TextView
+                        android:id="@+id/tvBioRashika"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="Loading bio..."
+                        android:textColor="#555555"
+                        android:textSize="16sp" />
+                        
+                    <com.example.vishika.BoldTextView
+                        android:id="@+id/tvNicknameRashika"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="Nickname: Loading..."
+                        android:textColor="#FF5C81"
+                        android:textSize="14sp"
+                        android:textStyle="bold"/>
+                        
+                    <com.example.vishika.BoldTextView
+                        android:id="@+id/tvDobRashika"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="DOB: Loading..."
+                        android:textColor="#FF5C81"
+                        android:textSize="14sp"
+                        android:textStyle="bold"/>
+                        
+                    <com.example.vishika.BoldTextView
+                        android:id="@+id/tvAnniversaryRashika"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Anniversary: Loading..."
+                        android:textColor="#FF5C81"
+                        android:textSize="14sp"
+                        android:textStyle="bold"/>
+
+
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Bottom Navigation Bar -->
+    <LinearLayout
+        android:id="@+id/bottomNavProfile"
+        android:layout_width="match_parent"
+        android:layout_height="70dp"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="32dp"
+        android:background="@drawable/bg_bottom_nav"
+        android:elevation="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <FrameLayout
+            android:id="@+id/navHome"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+            <ImageView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_home"
+                app:tint="#FFFFFF" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/navFeed"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_feed"
+                app:tint="#FFFFFF"/>
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/navProfile"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1">
+            <ImageView
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_button_answer"
+                android:padding="14dp"
+                android:src="@drawable/ic_user"
+                app:tint="#FF5C81" />
+        </FrameLayout>
+
+    </LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,84 @@
+--- /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/MainActivity.java
++++ /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/MainActivity.java
+@@ -51,6 +51,7 @@
+ import com.google.android.gms.maps.model.MarkerOptions;
+ import com.google.firebase.database.DataSnapshot;
+ import com.google.firebase.database.DatabaseError;
++import android.os.CountDownTimer;
+ import com.google.firebase.database.DatabaseReference;
+ import com.google.firebase.database.FirebaseDatabase;
+ import com.google.firebase.database.ValueEventListener;
+@@ -83,6 +84,7 @@
+     private String myDbNode = IS_VISHAL ? "locations/vishal" : "locations/rashika";
+     private String partnerDbNode = IS_VISHAL ? "locations/rashika" : "locations/vishal";
+     
++    private CountDownTimer birthdayTimer;
+     private double myLat = IS_VISHAL ? 31.663744 : 25.426241;
+     private double myLng = IS_VISHAL ? 74.928336 : 81.820452;
+     private double partnerLat = IS_VISHAL ? 25.426241 : 31.663744;
+@@ -734,13 +736,8 @@
+                 int birthDay = Integer.parseInt(parts[0]);
+                 int birthMonth = Integer.parseInt(parts[1]) - 1; // 0-indexed
+                 
+-                java.util.Calendar today = java.util.Calendar.getInstance();
+-                today.set(java.util.Calendar.HOUR_OF_DAY, 0);
+-                today.set(java.util.Calendar.MINUTE, 0);
+-                today.set(java.util.Calendar.SECOND, 0);
+-                today.set(java.util.Calendar.MILLISECOND, 0);
+-                
+                 java.util.Calendar nextBirthday = java.util.Calendar.getInstance();
++                java.util.Calendar today = java.util.Calendar.getInstance();
+                 nextBirthday.set(java.util.Calendar.MONTH, birthMonth);
+                 nextBirthday.set(java.util.Calendar.DAY_OF_MONTH, birthDay);
+                 nextBirthday.set(java.util.Calendar.HOUR_OF_DAY, 0);
+@@ -748,22 +745,39 @@
+                 nextBirthday.set(java.util.Calendar.SECOND, 0);
+                 nextBirthday.set(java.util.Calendar.MILLISECOND, 0);
+                 
+-                if (nextBirthday.before(today)) {
++                // If birthday is exactly today, check if we want to show "Today is birthday"
++                boolean isToday = nextBirthday.get(java.util.Calendar.DAY_OF_YEAR) == today.get(java.util.Calendar.DAY_OF_YEAR);
++                
++                if (nextBirthday.before(today) && !isToday) {
+                     nextBirthday.add(java.util.Calendar.YEAR, 1);
+                 }
+                 
+-                long diffMillis = nextBirthday.getTimeInMillis() - today.getTimeInMillis();
+-                long days = diffMillis / (1000 * 60 * 60 * 24);
+-                
+                 android.widget.TextView txt = findViewById(R.id.txtBirthdayCountdown);
+-                if (txt != null) {
+-                    String name = IS_VISHAL ? "Rashika" : "Vishal";
+-                    if (days == 0) {
+-                        txt.setText("🎉 Today is " + name + "'s Birthday! 🎉");
+-                    } else {
+-                        txt.setText("🎂 " + days + " days until " + name + "'s Birthday!");
+-                    }
++                if (txt == null) return;
++                String name = IS_VISHAL ? "Rashika" : "Vishal";
++                
++                if (isToday) {
++                    txt.setText("🎉 Today is " + name + "'s Birthday! 🎉");
++                    return;
+                 }
++                
++                if (birthdayTimer != null) birthdayTimer.cancel();
++                
++                long diffMillis = nextBirthday.getTimeInMillis() - System.currentTimeMillis();
++                birthdayTimer = new CountDownTimer(diffMillis, 1000) {
++                    public void onTick(long millisUntilFinished) {
++                        long days = millisUntilFinished / (1000 * 60 * 60 * 24);
++                        long hours = (millisUntilFinished / (1000 * 60 * 60)) % 24;
++                        long mins = (millisUntilFinished / (1000 * 60)) % 60;
++                        long secs = (millisUntilFinished / 1000) % 60;
++                        String timer = String.format(Locale.getDefault(), "%dd %02d:%02d:%02d", days, hours, mins, secs);
++                        txt.setText("🎂 " + name + "'s bday in:\n" + timer);
++                    }
++                    public void onFinish() {
++                        txt.setText("🎉 Today is " + name + "'s Birthday! 🎉");
++                    }
++                }.start();
++                
+             }
+         } catch (Exception e) {
+             e.printStackTrace();

@@ -1,0 +1,25 @@
+--- /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/MoodService.java
++++ /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/MoodService.java
+@@ -102,6 +102,23 @@
+                 public void onDataChange(@androidx.annotation.NonNull com.google.firebase.database.DataSnapshot snapshot) {
+                     String url = snapshot.getValue(String.class);
+                     if (url != null && !url.isEmpty()) {
++                        // Show toast and play notification tone
++                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
++                            android.widget.Toast.makeText(MoodService.this, "Voice note received!", android.widget.Toast.LENGTH_LONG).show();
++                        });
++                        try {
++                            android.net.Uri customSound = android.net.Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.custom_tone);
++                            android.media.MediaPlayer tonePlayer = android.media.MediaPlayer.create(MoodService.this, customSound);
++                            if (tonePlayer != null) {
++                                tonePlayer.setOnCompletionListener(android.media.MediaPlayer::release);
++                                tonePlayer.start();
++                            }
++                        } catch (Exception e) {
++                            e.printStackTrace();
++                        }
++                        
++                        
+                         playAudioFromUrl(url);
+                         // Delete after receiving to prevent replay on restart
+                         snapshot.getRef().removeValue();

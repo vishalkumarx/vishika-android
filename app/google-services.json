@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "997995098258",
+    "project_id": "vishika",
+    "storage_bucket": "vishika.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:997995098258:android:6f7635cbab0e350429364b",
+        "android_client_info": {
+          "package_name": "com.example.vishika"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCSdPkvE7_WvvPhVApEM0aM3W70lD5CRMg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

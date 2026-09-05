@@ -1,0 +1,784 @@
+package com.example.vishika;
+
+import android.Manifest;
+import android.app.ActivityManager;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.PorterDuff;
+import android.graphics.drawable.Drawable;
+import android.location.Address;
+import android.location.Geocoder;
+import android.location.Location;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+import android.media.MediaRecorder;
+import java.io.File;
+import android.view.MotionEvent;
+import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.provider.Settings;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Calendar;
+import java.text.ParseException;
+import java.util.List;
+import java.util.Locale;
+
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptor;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.CustomTarget;
+import com.bumptech.glide.request.transition.Transition;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.Priority;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import android.os.CountDownTimer;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
+public class MainActivity extends AppCompatActivity implements OnMapReadyCallback {
+
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
+    private static final int OVERLAY_PERMISSION_REQUEST_CODE = 2;
+    public static final boolean IS_VISHAL = true; // Toggle for testing
+    
+    private String myDbNode = IS_VISHAL ? "locations/vishal" : "locations/rashika";
+    private String partnerDbNode = IS_VISHAL ? "locations/rashika" : "locations/vishal";
+
+    private FusedLocationProviderClient fusedLocationClient;
+        private static final String SUPABASE_URL = "https://rftikfmjugzckousuyda.supabase.co";
+    private static final String SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmdGlrZm1qdWd6Y2tvdXN1eWRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNTQ3MTAsImV4cCI6MjEwMzgzMDcxMH0.esfpZIkGdf9CG-F_KpeYn3bx8xTqxOCoHJ-lbE0kk9Q";
+    private MediaRecorder mediaRecorder;
+    private String audioFilePath;
+    private boolean isRecording = false;
+    private DatabaseReference database;
+    private LocationCallback locationCallback;
+    
+    private CountDownTimer birthdayTimer;
+    private double myLat = IS_VISHAL ? 31.663744 : 25.426241;
+    private double myLng = IS_VISHAL ? 74.928336 : 81.820452;
+    private double partnerLat = IS_VISHAL ? 25.426241 : 31.663744;
+    private double partnerLng = IS_VISHAL ? 81.820452 : 74.928336;
+    private long partnerTimestamp = 0;
+    
+    private String myImageUrl = null;
+    private android.graphics.Bitmap myProfileBitmap = null;
+    private String partnerImageUrl = null;
+    private Bitmap partnerProfileBitmap = null;
+
+    private TextView textDistanceValue;
+    private TextView textLocationStatus;
+    
+    private GoogleMap mMap;
+    private Marker myMarker;
+    private Marker partnerMarker;
+    private Polyline connectionLine;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+        
+        textDistanceValue = findViewById(R.id.textDistanceValue);
+        textLocationStatus = findViewById(R.id.textLocationStatus);
+
+        FrameLayout navProfile = findViewById(R.id.navProfile);
+        android.view.View btnRefreshMap = findViewById(R.id.btnRefreshMap);
+
+        android.view.View.OnClickListener openDrawActivity = v -> {
+            Intent intent = new Intent(MainActivity.this, DrawActivity.class);
+            startActivity(intent);
+        };
+
+
+        
+        navProfile.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, ProfileActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+            overridePendingTransition(0, 0);
+        });
+        
+        btnRefreshMap.setOnClickListener(v -> {
+            Toast.makeText(this, "Centering map...", Toast.LENGTH_SHORT).show();
+            updateDistanceUI();
+        });
+
+        database = FirebaseDatabase.getInstance().getReference();
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        
+        android.view.View btnDrawForPartner = findViewById(R.id.btnDrawForPartner);
+        if (btnDrawForPartner != null) {
+            btnDrawForPartner.setOnClickListener(v -> {
+                Intent intent = new Intent(MainActivity.this, DrawActivity.class);
+                intent.putExtra("IS_VISHAL", IS_VISHAL);
+                startActivity(intent);
+            });
+        }
+        
+        setupMoodListeners();
+
+        // Handle Streak Logic
+        handleStreakLogic();
+
+
+        android.view.View btnPushToTalk = findViewById(R.id.btnPushToTalk);
+        TextView txtPushToTalk = findViewById(R.id.txtPushToTalk);
+        audioFilePath = getExternalCacheDir().getAbsolutePath() + "/walkietalkie.3gp";
+
+        if (btnPushToTalk != null) {
+            btnPushToTalk.setOnTouchListener((v, event) -> {
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 200);
+                    return false;
+                }
+                
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        if (!isRecording) {
+                            startRecording();
+                            txtPushToTalk.setText("Recording...");
+                            v.setBackgroundResource(R.drawable.bg_button_answer); // Add custom tint if you want
+                            v.setAlpha(0.7f);
+                            Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                            if (vibrator != null) vibrator.vibrate(50);
+                        }
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        if (isRecording) {
+                            stopRecordingAndUpload();
+                            txtPushToTalk.setText("Hold to Talk");
+                            v.setAlpha(1.0f);
+                        }
+                        return true;
+                }
+                return false;
+            });
+        }
+
+        checkOverlayPermissionAndStartService();
+
+        SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
+                .findFragmentById(R.id.mapFragment);
+        if (mapFragment != null) {
+            mapFragment.getMapAsync(this);
+        }
+        
+        setupPartnerLocationListener();
+        setupPartnerProfileListener();
+        checkLocationPermissionsAndStart();
+    }
+    
+
+    
+    @Override
+    public void onMapReady(@NonNull GoogleMap googleMap) {
+        mMap = googleMap;
+        mMap.getUiSettings().setAllGesturesEnabled(false); // Make it look like a static widget widget
+        mMap.getUiSettings().setZoomControlsEnabled(false);
+        updateMapUI();
+    }
+
+    private void checkLocationPermissionsAndStart() {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, LOCATION_PERMISSION_REQUEST_CODE);
+        } else {
+            startLocationUpdates();
+        }
+    }
+
+    private void startLocationUpdates() {
+        LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000)
+                .setMinUpdateDistanceMeters(10) // Update every 10 meters
+                .build();
+
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(@NonNull LocationResult locationResult) {
+                for (Location location : locationResult.getLocations()) {
+                    myLat = location.getLatitude();
+                    myLng = location.getLongitude();
+                    
+                    // Sync my location to Firebase
+                    database.child(myDbNode).child("lat").setValue(myLat);
+                    database.child(myDbNode).child("lng").setValue(myLng);
+                    database.child(myDbNode).child("timestamp").setValue(System.currentTimeMillis());
+                    
+                    updateDistanceUI();
+                }
+            }
+        };
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
+        }
+    }
+
+    private void setupPartnerLocationListener() {
+        database.child(partnerDbNode).addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (snapshot.exists()) {
+                    Double lat = snapshot.child("lat").getValue(Double.class);
+                    Double lng = snapshot.child("lng").getValue(Double.class);
+                    Long ts = snapshot.child("timestamp").getValue(Long.class);
+                    if (ts != null) partnerTimestamp = ts;
+                    if (lat != null && lng != null) {
+                        partnerLat = lat;
+                        partnerLng = lng;
+                        updateDistanceUI();
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+    }
+
+    private void setupPartnerProfileListener() {
+        String partnerProfileNode = IS_VISHAL ? "rashika" : "vishal";
+        
+        database.getRoot().child("profiles").child(IS_VISHAL ? "vishal" : "rashika").addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (snapshot.exists()) {
+                    String url = snapshot.child("imageUrl").getValue(String.class);
+                    if (url != null && !url.equals(myImageUrl)) {
+                        myImageUrl = url;
+                        Glide.with(MainActivity.this)
+                            .asBitmap()
+                            .load(url)
+                            .transform(new com.bumptech.glide.load.resource.bitmap.CircleCrop())
+                            .into(new CustomTarget<android.graphics.Bitmap>() {
+                                @Override
+                                public void onResourceReady(@NonNull android.graphics.Bitmap resource, @androidx.annotation.Nullable Transition<? super android.graphics.Bitmap> transition) {
+                                    myProfileBitmap = resource;
+                                    updateMapUI();
+                                }
+                                public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {}
+                            });
+                    }
+                }
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+
+        database.getRoot().child("profiles").child(partnerProfileNode).addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (snapshot.exists()) {
+                    String url = snapshot.child("imageUrl").getValue(String.class);
+                    if (url != null && !url.equals(partnerImageUrl)) {
+                        partnerImageUrl = url;
+                        Glide.with(MainActivity.this)
+                            .asBitmap()
+                            .load(url)
+                            .transform(new com.bumptech.glide.load.resource.bitmap.CircleCrop())
+                            .into(new CustomTarget<Bitmap>() {
+                                @Override
+                                public void onResourceReady(@NonNull Bitmap resource, @androidx.annotation.Nullable Transition<? super Bitmap> transition) {
+                                    partnerProfileBitmap = resource;
+                                    updateMapUI();
+                                }
+                                @Override
+                                public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {}
+                            });
+                    }
+                    
+                    String dobStr = snapshot.child("dob").getValue(String.class);
+                    if (dobStr != null) {
+                        calculateAndShowBirthdayCountdown(dobStr);
+                    }
+                }
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+    }
+
+    private void updateDistanceUI() {
+        float[] results = new float[1];
+        Location.distanceBetween(myLat, myLng, partnerLat, partnerLng, results);
+        int distanceInKm = Math.round(results[0] / 1000f);
+        textDistanceValue.setText("Distance apart: " + distanceInKm + " km");
+        
+        String partnerName = IS_VISHAL ? "Rashika" : "Vishal";
+        
+        if (partnerTimestamp == 0) {
+            textLocationStatus.setText("Waiting for " + partnerName + " to share location...");
+            textLocationStatus.setTextColor(android.graphics.Color.parseColor("#555555"));
+        } else if ((System.currentTimeMillis() - partnerTimestamp) > (15 * 60 * 1000)) {
+            String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date(partnerTimestamp));
+            textLocationStatus.setText(partnerName + "'s location is off (Last seen at " + timeStr + ")");
+            textLocationStatus.setTextColor(android.graphics.Color.parseColor("#D32F2F")); // Red color for alert
+        } else {
+            textLocationStatus.setTextColor(android.graphics.Color.parseColor("#555555"));
+            // Get city name using Geocoder asynchronously
+            new Thread(() -> {
+                try {
+                    Geocoder geocoder = new Geocoder(MainActivity.this, Locale.getDefault());
+                    List<Address> addresses = geocoder.getFromLocation(partnerLat, partnerLng, 1);
+                    if (addresses != null && !addresses.isEmpty()) {
+                        Address addr = addresses.get(0);
+                        
+                        String feature = addr.getFeatureName();
+                        String subLocality = addr.getSubLocality();
+                        String locality = addr.getLocality();
+                        if (locality == null) locality = addr.getSubAdminArea();
+                        String state = addr.getAdminArea();
+                        
+                        StringBuilder locationBuilder = new StringBuilder();
+                        
+                        // Filter out Plus Codes (e.g. RWJH+XM6), pure street numbers, and duplicates
+                        if (feature != null) {
+                            if (feature.contains("+") || feature.matches("^[0-9\\-]+$") || feature.equals(locality) || feature.equals(subLocality) || feature.equals(state)) {
+                                feature = null;
+                            }
+                        }
+                        
+                        if (feature != null) {
+                            locationBuilder.append(feature).append(", ");
+                        } else if (subLocality != null && !subLocality.equals(locality)) {
+                            locationBuilder.append(subLocality).append(", ");
+                        }
+                        
+                        if (locality != null) {
+                            locationBuilder.append(locality);
+                        } else if (state != null) {
+                            locationBuilder.append(state);
+                        }
+                        
+                        if (locationBuilder.length() == 0) {
+                            locationBuilder.append("Unknown area");
+                        }
+                        
+                        String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date(partnerTimestamp));
+                        final String finalText = partnerName + " is at " + locationBuilder.toString() + " since " + timeStr;
+                        
+                        runOnUiThread(() -> {
+                            textLocationStatus.setText(finalText);
+                        });
+                    }
+                } catch (Exception e) {
+                    // Ignore geocoder errors
+                }
+            }).start();
+        }
+        
+        updateMapUI();
+    }
+    
+    private BitmapDescriptor getCustomMarker(android.graphics.Bitmap profileBitmap) {
+        if (profileBitmap == null) {
+            return bitmapDescriptorFromVector(R.drawable.ic_heart_filled);
+        }
+        
+        View customMarkerView = ((LayoutInflater) getSystemService(android.content.Context.LAYOUT_INFLATER_SERVICE)).inflate(R.layout.custom_marker, null);
+        ImageView markerImage = customMarkerView.findViewById(R.id.markerImage);
+        androidx.cardview.widget.CardView markerCard = customMarkerView.findViewById(R.id.markerCard);
+        
+        markerCard.setVisibility(View.VISIBLE);
+        markerImage.setImageBitmap(profileBitmap);
+        
+        customMarkerView.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        customMarkerView.layout(0, 0, customMarkerView.getMeasuredWidth(), customMarkerView.getMeasuredHeight());
+        
+        android.graphics.Bitmap returnedBitmap = android.graphics.Bitmap.createBitmap(customMarkerView.getMeasuredWidth(), customMarkerView.getMeasuredHeight(), android.graphics.Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(returnedBitmap);
+        canvas.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR);
+        customMarkerView.draw(canvas);
+        
+        return BitmapDescriptorFactory.fromBitmap(returnedBitmap);
+    }
+    
+    private void updateMapUI() {
+        if (mMap == null) return;
+        
+        LatLng me = new LatLng(myLat, myLng);
+        LatLng partner = new LatLng(partnerLat, partnerLng);
+        
+        BitmapDescriptor myIcon = getCustomMarker(myProfileBitmap);
+        BitmapDescriptor partnerIcon = getCustomMarker(partnerProfileBitmap);
+        
+        if (myMarker == null) {
+            myMarker = mMap.addMarker(new MarkerOptions().position(me).title(IS_VISHAL ? "Me" : "Rashika").icon(myIcon));
+        } else {
+            myMarker.setPosition(me);
+            myMarker.setIcon(myIcon);
+        }
+        
+        if (partnerMarker == null) {
+            partnerMarker = mMap.addMarker(new MarkerOptions().position(partner).title(IS_VISHAL ? "Rashika" : "Me").icon(partnerIcon));
+        } else {
+            partnerMarker.setPosition(partner);
+            partnerMarker.setIcon(partnerIcon);
+        }
+        
+        // Remove polyline if it exists since we are focusing just on the partner
+        if (connectionLine != null) {
+            connectionLine.remove();
+            connectionLine = null;
+        }
+        
+        // Center the camera on the partner with a nice close zoom level (e.g., 15f)
+        try {
+            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(partner, 15f));
+        } catch (Exception e) {
+            // Layout not yet complete, ignore
+        }
+    }
+    
+    private BitmapDescriptor bitmapDescriptorFromVector(int vectorResId) {
+        android.graphics.drawable.Drawable vectorDrawable = androidx.core.content.ContextCompat.getDrawable(this, vectorResId);
+        if (vectorDrawable == null) return null;
+        
+        // Scale up the heart slightly so it's clearly visible on the map
+        int width = (int) (vectorDrawable.getIntrinsicWidth() * 1.5f);
+        int height = (int) (vectorDrawable.getIntrinsicHeight() * 1.5f);
+        
+        vectorDrawable.setBounds(0, 0, width, height);
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
+        vectorDrawable.draw(canvas);
+        return BitmapDescriptorFactory.fromBitmap(bitmap);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                startLocationUpdates();
+            } else {
+                Toast.makeText(this, "Location permission is required for real-time distance!", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (fusedLocationClient != null && locationCallback != null) {
+            fusedLocationClient.removeLocationUpdates(locationCallback);
+        }
+        if (birthdayTimer != null) birthdayTimer.cancel();
+    }
+
+    private void setupMoodListeners() {
+        String partnerName = IS_VISHAL ? "rashika" : "vishal";
+        
+        findViewById(R.id.moodHeart).setOnClickListener(v -> sendMood(partnerName, "❤️"));
+        findViewById(R.id.moodPlead).setOnClickListener(v -> sendMood(partnerName, "🥺"));
+        findViewById(R.id.moodKiss).setOnClickListener(v -> sendMood(partnerName, "😘"));
+        findViewById(R.id.moodBite).setOnClickListener(v -> sendMood(partnerName, "🫦"));
+    }
+    
+    private void sendMood(String partnerName, String emoji) {
+        String moodId = database.child("moods").child(partnerName).push().getKey();
+        if (moodId != null) {
+            database.child("moods").child(partnerName).child(moodId).child("emoji").setValue(emoji);
+            database.child("moods").child(partnerName).child(moodId).child("timestamp").setValue(System.currentTimeMillis());
+            
+            // Play animation locally
+            Intent playIntent = new Intent(this, MoodService.class);
+            playIntent.setAction("PLAY_ANIMATION");
+            playIntent.putExtra("EMOJI", emoji);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(playIntent);
+            } else {
+                startService(playIntent);
+            }
+            
+            // Add a mild vibration
+            Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            if (v != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    v.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE));
+                } else {
+                    v.vibrate(50);
+                }
+            }
+        }
+    }
+    
+    private void checkOverlayPermissionAndStartService() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (!Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST_CODE);
+            } else {
+                startMoodService();
+            }
+        } else {
+            startMoodService();
+        }
+    }
+    
+    private void startMoodService() {
+        if (!isServiceRunning(MoodService.class)) {
+            Intent serviceIntent = new Intent(this, MoodService.class);
+            serviceIntent.putExtra("IS_VISHAL", IS_VISHAL);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+        }
+    }
+
+    private boolean isServiceRunning(Class<?> serviceClass) {
+        ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (serviceClass.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
+                startMoodService();
+            } else {
+                Toast.makeText(this, "Permission required for mood rains!", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+
+    private void startRecording() {
+        mediaRecorder = new MediaRecorder();
+        mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC);
+        mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.THREE_GPP);
+        mediaRecorder.setOutputFile(audioFilePath);
+        mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AMR_NB);
+        
+        try {
+            mediaRecorder.prepare();
+            mediaRecorder.start();
+            isRecording = true;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void stopRecordingAndUpload() {
+        if (mediaRecorder != null) {
+            try {
+                mediaRecorder.stop();
+            } catch (RuntimeException stopException) {
+                // handle small touches where stop fails
+            }
+            mediaRecorder.release();
+            mediaRecorder = null;
+            isRecording = false;
+
+            // Upload to Supabase Storage
+            File file = new File(audioFilePath);
+            if (file.exists()) {
+                String filename = System.currentTimeMillis() + ".3gp";
+                String bucket = "profile_images"; // Using profile_images bucket since we know it exists and is public
+                String uploadUrl = SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + filename;
+                
+                OkHttpClient client = new OkHttpClient();
+                RequestBody body = RequestBody.create(file, MediaType.parse("audio/3gpp"));
+                
+                Request request = new Request.Builder()
+                        .url(uploadUrl)
+                        .post(body)
+                        .addHeader("Authorization", "Bearer " + SUPABASE_KEY)
+                        .addHeader("apikey", SUPABASE_KEY)
+                        .addHeader("Content-Type", "audio/3gpp")
+                        .build();
+                        
+                client.newCall(request).enqueue(new Callback() {
+                    @Override
+                    public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                        e.printStackTrace();
+                        runOnUiThread(() -> Toast.makeText(MainActivity.this, "Failed to upload audio", Toast.LENGTH_SHORT).show());
+                    }
+
+                    @Override
+                    public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                        if (response.isSuccessful()) {
+                            String publicUrl = SUPABASE_URL + "/storage/v1/object/public/" + bucket + "/" + filename;
+                            
+                            runOnUiThread(() -> {
+                                database.child("voice_notes").child(myDbNode.replace("locations/", "")).child("latest_url").setValue(publicUrl);
+                                Toast.makeText(MainActivity.this, "Voice note sent!", Toast.LENGTH_SHORT).show();
+                            });
+                        } else {
+                            String err = response.body() != null ? response.body().string() : "Unknown error";
+                            runOnUiThread(() -> Toast.makeText(MainActivity.this, "Upload failed: " + response.code() + " " + err, Toast.LENGTH_LONG).show());
+                        }
+                        response.close();
+                    }
+                });
+            }
+        }
+    }
+
+
+    private void handleStreakLogic() {
+        TextView dayPill = findViewById(R.id.dayPill);
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault());
+        String today = sdf.format(new Date());
+        
+        database.child("streak").addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                int count = 1;
+                String lastOpened = null;
+                
+                if (snapshot.exists()) {
+                    Long c = snapshot.child("count").getValue(Long.class);
+                    if (c != null) count = c.intValue();
+                    lastOpened = snapshot.child("lastOpenedDate").getValue(String.class);
+                }
+                
+                if (lastOpened != null && lastOpened.equals(today)) {
+                    // Already opened today, do nothing to count
+                } else if (lastOpened != null) {
+                    try {
+                        Date lastDate = sdf.parse(lastOpened);
+                        Calendar cal = Calendar.getInstance();
+                        cal.setTime(lastDate);
+                        cal.add(Calendar.DAY_OF_YEAR, 1);
+                        String expectedToday = sdf.format(cal.getTime());
+                        
+                        if (expectedToday.equals(today)) {
+                            // Streak continues!
+                            count++;
+                        } else {
+                            // Streak broken
+                            count = 1;
+                        }
+                    } catch (ParseException e) {
+                        e.printStackTrace();
+                        count = 1;
+                    }
+                }
+                
+                // Update Firebase and UI
+                database.child("streak").child("count").setValue(count);
+                database.child("streak").child("lastOpenedDate").setValue(today);
+                
+                if (dayPill != null) {
+                    dayPill.setText("Day " + count);
+                }
+            }
+            
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+    }
+    private void calculateAndShowBirthdayCountdown(String dobStr) {
+        try {
+            if (dobStr.contains(":")) {
+                dobStr = dobStr.substring(dobStr.indexOf(":") + 1).trim();
+            }
+            if (dobStr.isEmpty() || dobStr.equals("Not set")) return;
+            
+            String[] parts = dobStr.split("/");
+            if (parts.length >= 2) {
+                int birthDay = Integer.parseInt(parts[0]);
+                int birthMonth = Integer.parseInt(parts[1]) - 1; // 0-indexed
+                
+                java.util.Calendar nextBirthday = java.util.Calendar.getInstance();
+                java.util.Calendar today = java.util.Calendar.getInstance();
+                nextBirthday.set(java.util.Calendar.MONTH, birthMonth);
+                nextBirthday.set(java.util.Calendar.DAY_OF_MONTH, birthDay);
+                nextBirthday.set(java.util.Calendar.HOUR_OF_DAY, 0);
+                nextBirthday.set(java.util.Calendar.MINUTE, 0);
+                nextBirthday.set(java.util.Calendar.SECOND, 0);
+                nextBirthday.set(java.util.Calendar.MILLISECOND, 0);
+                
+                // If birthday is exactly today, check if we want to show "Today is birthday"
+                boolean isToday = nextBirthday.get(java.util.Calendar.DAY_OF_YEAR) == today.get(java.util.Calendar.DAY_OF_YEAR);
+                
+                if (nextBirthday.before(today) && !isToday) {
+                    nextBirthday.add(java.util.Calendar.YEAR, 1);
+                }
+                
+                android.widget.TextView txtTitle = findViewById(R.id.txtBirthdayTitle);
+                android.widget.TextView txtCountdown = findViewById(R.id.txtBirthdayCountdown);
+                if (txtCountdown == null || txtTitle == null) return;
+                String name = IS_VISHAL ? "Rashika" : "Vishal";
+                
+                txtTitle.setText(name + "'s Birthday");
+                
+                if (isToday) {
+                    txtCountdown.setText("🎉 TODAY! 🎉");
+                    return;
+                }
+                
+                if (birthdayTimer != null) birthdayTimer.cancel();
+                
+                long diffMillis = nextBirthday.getTimeInMillis() - System.currentTimeMillis();
+                birthdayTimer = new CountDownTimer(diffMillis, 1000) {
+                    public void onTick(long millisUntilFinished) {
+                        long days = millisUntilFinished / (1000 * 60 * 60 * 24);
+                        long hours = (millisUntilFinished / (1000 * 60 * 60)) % 24;
+                        long mins = (millisUntilFinished / (1000 * 60)) % 60;
+                        long secs = (millisUntilFinished / 1000) % 60;
+                        String timer = String.format(Locale.getDefault(), "%dd %02d:%02d:%02d", days, hours, mins, secs);
+                        txtCountdown.setText(timer);
+                    }
+                    public void onFinish() {
+                        txtCountdown.setText("🎉 TODAY! 🎉");
+                    }
+                }.start();
+                
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}

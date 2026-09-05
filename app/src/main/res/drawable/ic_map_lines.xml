@@ -1,0 +1,23 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+  <path
+      android:strokeColor="#D9E6F6"
+      android:strokeWidth="4"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:pathData="
+        M -20,60 L 80,40 L 150,80 L 220,50
+        M 80,40 L 60,-20
+        M 150,80 L 170,220
+        M -20,150 L 50,130 L 120,160 L 220,140
+        M 50,130 L 30,220
+        M 120,160 L 90,80
+        M 180,-20 L 220,30
+        M -20,20 L 30,-20
+        M 140,120 L 220,90
+        M 10,90 L 60,110
+      " />
+</vector>

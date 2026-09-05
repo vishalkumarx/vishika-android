@@ -1,0 +1,16 @@
+--- /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/DrawingView.java
++++ /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/DrawingView.java
+@@ -147,6 +147,13 @@
+                         );
+                         wakeLock.acquire(10000); 
+                     }
++                    
++                    // Force the WindowManager to bring this view to the front over the lock screen
++                    android.view.WindowManager wm = (android.view.WindowManager) getContext().getSystemService(android.content.Context.WINDOW_SERVICE);
++                    android.view.ViewGroup.LayoutParams params = getLayoutParams();
++                    if (wm != null && params != null) {
++                        wm.updateViewLayout(DrawingView.this, params);
++                    }
+                 } catch (Exception ignored) {}
+ 
+                 // Listen to points added to this stroke

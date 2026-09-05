@@ -1,0 +1,31 @@
+--- /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/MainActivity.java
++++ /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/MainActivity.java
+@@ -209,6 +209,7 @@
+         setupPartnerLocationListener();
+         setupPartnerProfileListener();
+         checkLocationPermissionsAndStart();
++        calculateTogetherSince();
+     }
+     
+ 
+@@ -772,4 +773,20 @@
+             e.printStackTrace();
+         }
+     }
++
++    private void calculateTogetherSince() {
++        try {
++            java.util.Calendar startDate = java.util.Calendar.getInstance();
++            startDate.set(2026, java.util.Calendar.JUNE, 25, 0, 0, 0); // 25 June 2026
++            
++            long diffMillis = System.currentTimeMillis() - startDate.getTimeInMillis();
++            long days = diffMillis / (1000 * 60 * 60 * 24);
++            if (days < 0) days = 0; // Prevent negative if current date is somehow earlier
++            
++            android.widget.TextView txtDays = findViewById(R.id.txtTogetherDays);
++            if (txtDays != null) txtDays.setText(days + " days Together");
++        } catch (Exception e) {
++            e.printStackTrace();
++        }
++    }
+ }

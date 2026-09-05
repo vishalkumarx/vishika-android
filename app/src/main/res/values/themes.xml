@@ -1,0 +1,17 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.Vishika" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:fontFamily">@font/fredoka</item>
+        <item name="fontFamily">@font/fredoka</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#FFFFFF</item>
+    </style>
+
+    <style name="Theme.Vishika" parent="Base.Theme.Vishika" />
+
+    <style name="Theme.UCrop" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowOptOutEdgeToEdgeEnforcement" tools:targetApi="35">true</item>
+        <item name="android:fitsSystemWindows">true</item>
+        <item name="android:windowTranslucentStatus">false</item>
+    </style>
+</resources>

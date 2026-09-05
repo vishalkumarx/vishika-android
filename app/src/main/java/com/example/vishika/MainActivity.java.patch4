@@ -1,0 +1,15 @@
+--- /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/MainActivity.java
++++ /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/MainActivity.java
+@@ -699,6 +699,12 @@
+             return true;
+         });
+     }
++    
++    @Override
++    protected void onDestroy() {
++        super.onDestroy();
++        if (birthdayTimer != null) birthdayTimer.cancel();
++    }
+ 
+     private void calculateAndShowBirthdayCountdown(String dobStr) {
+         try {

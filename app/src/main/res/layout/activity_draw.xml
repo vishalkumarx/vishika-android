@@ -1,0 +1,205 @@
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootView"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/apk/res-tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    tools:context=".DrawActivity">
+
+    <com.example.vishika.DrawingView
+        android:id="@+id/drawingView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Top Bar: Exit button -->
+    <LinearLayout
+        android:id="@+id/btnExit"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="48dp"
+        android:background="@drawable/bg_button_answer"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:padding="12dp"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+        
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="#2D2036" />
+        
+        <com.example.vishika.BoldTextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:fontFamily="@font/fredoka"
+            android:text="Back"
+            android:textColor="#2D2036"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Vertical Slider for Pen Size on Left -->
+    <SeekBar
+        android:id="@+id/sliderSize"
+        android:layout_width="300dp"
+        android:layout_height="60dp"
+        android:rotation="270"
+        android:max="50"
+        android:progress="12"
+        android:progressDrawable="@android:color/transparent"
+        android:background="@drawable/tapered_slider_bg"
+        android:splitTrack="false"
+        android:thumbTint="#FF4081"
+        android:paddingStart="30dp"
+        android:paddingEnd="30dp"
+        android:clipToPadding="false"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent"
+        android:layout_marginStart="-120dp" /> <!-- Offset to compensate for rotation and width -->
+
+    <!-- Tools on Right -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginEnd="16dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <LinearLayout
+            android:id="@+id/btnDraw"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_button_answer"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:layout_marginBottom="8dp">
+            
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_edit"
+                app:tint="#212121" />
+        </LinearLayout>
+        
+        <LinearLayout
+            android:id="@+id/btnText"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_button_answer"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:layout_marginBottom="8dp">
+            
+            <com.example.vishika.BoldTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="T"
+                android:textSize="24sp"
+                android:textColor="#212121"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnSticker"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_button_answer"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone">
+            
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_sticker_icon"
+                app:tint="#212121" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnUndo"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_button_answer"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:layout_marginBottom="16dp">
+            
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_undo"
+                app:tint="#212121" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnClear"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_button_answer"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true">
+            
+            <ImageView
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:src="@drawable/ic_delete"
+                app:tint="#FF5252" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Active Color Indicator / Chooser -->
+    <FrameLayout
+        android:id="@+id/btnColorChooser"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_marginBottom="32dp"
+        android:layout_marginStart="24dp"
+        android:background="@drawable/bg_button_answer"
+        android:padding="8dp"
+        android:clickable="true"
+        android:focusable="true"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+        
+        <View
+            android:id="@+id/activeColorIndicator"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/circle_shape"
+            android:backgroundTint="#000000" />
+    </FrameLayout>
+
+    <!-- Hidden EditTexts for Text/Sticker inputs -->
+    <EditText
+        android:id="@+id/hiddenEmojiEditText"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:background="@null"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:cursorVisible="false"
+        android:inputType="textCapSentences|textMultiLine"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,37 @@
+--- /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/DrawingView.java
++++ /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/DrawingView.java
+@@ -159,10 +159,13 @@
+                     public void onChildAdded(@NonNull DataSnapshot ptSnap, String prevChild) {
+                         Double x = ptSnap.child("x").getValue(Double.class);
+                         Double y = ptSnap.child("y").getValue(Double.class);
+                         if (x != null && y != null) {
++                            int[] loc = new int[2];
++                            getLocationOnScreen(loc);
++                            float localX = x.floatValue() - loc[0];
++                            float localY = y.floatValue() - loc[1];
+                             if (isFirst) {
+-                                stroke.path.moveTo(x.floatValue(), y.floatValue());
++                                stroke.path.moveTo(localX, localY);
+                                 isFirst = false;
+                             } else {
+-                                stroke.path.lineTo(x.floatValue(), y.floatValue());
++                                stroke.path.lineTo(localX, localY);
+                             }
+                             invalidate();
+@@ -282,10 +285,13 @@
+     }
+ 
+     private void pushPointToFirebase(float x, float y) {
++        int[] loc = new int[2];
++        getLocationOnScreen(loc);
++        float screenX = x + loc[0];
++        float screenY = y + loc[1];
+         if (isSetup && myStrokesRef != null && currentStrokeKey != null) {
+             Map<String, Object> point = new HashMap<>();
+-            point.put("x", x);
+-            point.put("y", y);
++            point.put("x", screenX);
++            point.put("y", screenY);
+             myStrokesRef.child(currentStrokeKey).child("points").push().setValue(point);
+         }
+     }

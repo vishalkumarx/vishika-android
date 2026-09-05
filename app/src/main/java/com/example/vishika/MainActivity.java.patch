@@ -1,0 +1,67 @@
+--- /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/MainActivity.java
++++ /Users/vishalkumar/Desktop/vishika/app/src/main/java/com/example/vishika/MainActivity.java
+@@ -321,6 +321,11 @@
+                                 public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {}
+                             });
+                     }
++                    
++                    String dobStr = snapshot.child("dob").getValue(String.class);
++                    if (dobStr != null) {
++                        calculateAndShowBirthdayCountdown(dobStr);
++                    }
+                 }
+             }
+             @Override
+@@ -694,4 +699,44 @@
+             return true;
+         });
+     }
++
++    private void calculateAndShowBirthdayCountdown(String dobStr) {
++        try {
++            if (dobStr.contains(":")) {
++                dobStr = dobStr.substring(dobStr.indexOf(":") + 1).trim();
++            }
++            if (dobStr.isEmpty() || dobStr.equals("Not set")) return;
++            
++            String[] parts = dobStr.split("/");
++            if (parts.length >= 2) {
++                int birthDay = Integer.parseInt(parts[0]);
++                int birthMonth = Integer.parseInt(parts[1]) - 1; // 0-indexed
++                
++                java.util.Calendar today = java.util.Calendar.getInstance();
++                today.set(java.util.Calendar.HOUR_OF_DAY, 0);
++                today.set(java.util.Calendar.MINUTE, 0);
++                today.set(java.util.Calendar.SECOND, 0);
++                today.set(java.util.Calendar.MILLISECOND, 0);
++                
++                java.util.Calendar nextBirthday = java.util.Calendar.getInstance();
++                nextBirthday.set(java.util.Calendar.MONTH, birthMonth);
++                nextBirthday.set(java.util.Calendar.DAY_OF_MONTH, birthDay);
++                nextBirthday.set(java.util.Calendar.HOUR_OF_DAY, 0);
++                nextBirthday.set(java.util.Calendar.MINUTE, 0);
++                nextBirthday.set(java.util.Calendar.SECOND, 0);
++                nextBirthday.set(java.util.Calendar.MILLISECOND, 0);
++                
++                if (nextBirthday.before(today)) {
++                    nextBirthday.add(java.util.Calendar.YEAR, 1);
++                }
++                
++                long diffMillis = nextBirthday.getTimeInMillis() - today.getTimeInMillis();
++                long days = diffMillis / (1000 * 60 * 60 * 24);
++                
++                TextView txt = findViewById(R.id.txtBirthdayCountdown);
++                if (txt != null) {
++                    String name = IS_VISHAL ? "Rashika" : "Vishal";
++                    if (days == 0) {
++                        txt.setText("🎉 Today is " + name + "'s Birthday! 🎉");
++                    } else {
++                        txt.setText("🎂 " + days + " days until " + name + "'s Birthday!");
++                    }
++                }
++            }
++        } catch (Exception e) {
++            e.printStackTrace();
++        }
++    }
+ }
