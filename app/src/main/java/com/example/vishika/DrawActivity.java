@@ -68,6 +68,9 @@ public class DrawActivity extends AppCompatActivity {
 
         View btnExit = findViewById(R.id.btnExit);
         View btnDraw = findViewById(R.id.btnDraw);
+        View btnRainbow = findViewById(R.id.btnRainbow);
+        View btnEraser = findViewById(R.id.btnEraser);
+        View btnHeart = findViewById(R.id.btnHeart);
         View btnText = findViewById(R.id.btnText);
         View btnSticker = findViewById(R.id.btnSticker);
         View btnUndo = findViewById(R.id.btnUndo);
@@ -75,7 +78,7 @@ public class DrawActivity extends AppCompatActivity {
         SeekBar sliderSize = findViewById(R.id.sliderSize);
         
         DatabaseReference database = FirebaseDatabase.getInstance().getReference();
-        boolean isVishal = getIntent().getBooleanExtra("IS_VISHAL", true);
+        boolean isVishal = MainActivity.IS_VISHAL;
         String myId = isVishal ? "vishal" : "rashika";
         String partnerId = isVishal ? "rashika" : "vishal";
         
@@ -87,14 +90,57 @@ public class DrawActivity extends AppCompatActivity {
             btnExit.setOnClickListener(v -> finish());
         }
         
-        View[] toolBtns = {btnDraw, btnText, btnSticker};
+        View[] toolBtns = {btnDraw, btnRainbow, btnEraser, btnHeart, btnText, btnSticker};
         
         btnDraw.setOnClickListener(v -> {
             if (drawingView != null) {
                 drawingView.commitActiveObject();
                 drawingView.currentTool = "path";
+                if (drawingView.getCurrentColor() == android.graphics.Color.parseColor("#000001")) {
+                    drawingView.setCurrentColor(lastSelectedColor);
+                    if (activeColorIndicator != null) {
+                        activeColorIndicator.setBackgroundResource(R.drawable.circle_shape);
+                        activeColorIndicator.setBackgroundTintList(android.content.res.ColorStateList.valueOf(lastSelectedColor));
+                    }
+                }
             }
             updateToolSelection(toolBtns, btnDraw);
+            sliderSize.setVisibility(android.view.View.VISIBLE);
+        });
+        
+        btnRainbow.setOnClickListener(v -> {
+            if (drawingView != null) {
+                drawingView.commitActiveObject();
+                drawingView.currentTool = "path";
+                int rainbowColor = android.graphics.Color.parseColor("#000001");
+                drawingView.setCurrentColor(rainbowColor);
+                if (activeColorIndicator != null) {
+                    activeColorIndicator.setBackgroundResource(R.drawable.bg_gradient_pink);
+                    activeColorIndicator.setBackgroundTintList(null);
+                }
+            }
+            updateToolSelection(toolBtns, btnRainbow);
+            sliderSize.setVisibility(android.view.View.VISIBLE);
+        });
+        
+        btnEraser.setOnClickListener(v -> {
+            if (drawingView != null) {
+                drawingView.commitActiveObject();
+                drawingView.currentTool = "eraser";
+            }
+            updateToolSelection(toolBtns, btnEraser);
+            sliderSize.setVisibility(android.view.View.VISIBLE);
+        });
+        
+        btnHeart.setOnClickListener(v -> {
+            if (drawingView != null) {
+                drawingView.commitActiveObject();
+                drawingView.currentTool = "heart";
+                if (drawingView.getCurrentColor() == android.graphics.Color.parseColor("#000001")) {
+                    drawingView.setCurrentColor(lastSelectedColor); // Reset if coming from rainbow
+                }
+            }
+            updateToolSelection(toolBtns, btnHeart);
             sliderSize.setVisibility(android.view.View.VISIBLE);
         });
         
@@ -120,7 +166,10 @@ public class DrawActivity extends AppCompatActivity {
         updateToolSelection(toolBtns, btnDraw); // Default
         
         drawingView.setOnTouchListener((v, event) -> {
-            if (drawingView.currentTool.equals("path")) return false;
+            String t = drawingView.currentTool;
+            if (t.equals("path") || t.equals("eraser") || t.equals("heart")) {
+                return false;
+            }
             return drawingView.handleInteractiveTouch(event);
         });
 
@@ -158,62 +207,55 @@ public class DrawActivity extends AppCompatActivity {
     }
 
     private void openColorPickerPanel() {
-        android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
-        android.widget.GridLayout gridLayout = new android.widget.GridLayout(this);
-        gridLayout.setColumnCount(5);
-        
-        int padding = (int) (16 * getResources().getDisplayMetrics().density);
-        gridLayout.setPadding(padding, padding, padding, padding);
-        gridLayout.setUseDefaultMargins(true);
-        gridLayout.setAlignmentMode(android.widget.GridLayout.ALIGN_BOUNDS);
-        
-        int numColors = 50;
-        float[] hsv = new float[3];
-        hsv[1] = 1.0f;
-        hsv[2] = 1.0f;
-        
         com.google.android.material.bottomsheet.BottomSheetDialog dialog = new com.google.android.material.bottomsheet.BottomSheetDialog(this);
         
-        for (int i = 0; i < numColors; i++) {
-            int color;
-            if (i < 40) {
-                hsv[0] = (i * (360f / 40f));
-                color = Color.HSVToColor(hsv);
-            } else {
-                int intensity = 255 - ((i - 40) * 25);
-                color = Color.rgb(intensity, intensity, intensity);
-            }
-            
-            View colorView = new View(this);
-            int size = (int) (48 * getResources().getDisplayMetrics().density);
+        View view = getLayoutInflater().inflate(R.layout.dialog_color_palette, null);
+        android.widget.GridLayout gridColors = view.findViewById(R.id.gridColors);
+        
+        int[] palette = {
+            0xFFF44336, 0xFFE91E63, 0xFF9C27B0, 0xFF673AB7, 0xFF3F51B5,
+            0xFF2196F3, 0xFF03A9F4, 0xFF00BCD4, 0xFF009688, 0xFF4CAF50,
+            0xFF8BC34A, 0xFFCDDC39, 0xFFFFEB3B, 0xFFFFC107, 0xFFFF9800,
+            0xFFFF5722, 0xFF795548, 0xFF9E9E9E, 0xFF607D8B, 0xFF000000
+        };
+
+        int size = (int) (50 * getResources().getDisplayMetrics().density);
+        int margin = (int) (6 * getResources().getDisplayMetrics().density);
+
+        for (int c : palette) {
+            NeumorphicColorView colorView = new NeumorphicColorView(this);
             android.widget.GridLayout.LayoutParams params = new android.widget.GridLayout.LayoutParams();
             params.width = size;
             params.height = size;
-            params.setMargins(12, 12, 12, 12);
+            params.setMargins(margin, margin, margin, margin);
             colorView.setLayoutParams(params);
+            colorView.setColor(c);
             
-            android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
-            gd.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-            gd.setColor(color);
-            colorView.setBackground(gd);
+            // Replaced manual gradient drawable setup as NeumorphicColorView handles it internally
             
-            final int finalColor = color;
             colorView.setOnClickListener(v -> {
+                lastSelectedColor = c;
                 if (drawingView != null) {
-                    drawingView.setCurrentColor(finalColor);
-                    drawingView.updateActiveObjectColor(finalColor);
+                    drawingView.setCurrentColor(c);
+                    drawingView.updateActiveObjectColor(c);
+                    if ((drawingView.currentTool.equals("path") || drawingView.currentTool.equals("eraser") || drawingView.currentTool.equals("heart")) && drawingView.getCurrentColor() != android.graphics.Color.parseColor("#000001")) {
+                        drawingView.currentTool = "path";
+                        updateToolSelection(new View[]{findViewById(R.id.btnDraw), findViewById(R.id.btnRainbow), findViewById(R.id.btnEraser), findViewById(R.id.btnHeart), findViewById(R.id.btnText), findViewById(R.id.btnSticker)}, findViewById(R.id.btnDraw));
+                    }
                 }
                 if (activeColorIndicator != null) {
-                    activeColorIndicator.setBackgroundTintList(android.content.res.ColorStateList.valueOf(finalColor));
+                    activeColorIndicator.setBackgroundResource(R.drawable.circle_shape);
+                    activeColorIndicator.setBackgroundTintList(android.content.res.ColorStateList.valueOf(c));
                 }
                 dialog.dismiss();
             });
-            
-            gridLayout.addView(colorView);
+            gridColors.addView(colorView);
         }
         
-        scrollView.addView(gridLayout);
-        dialog.setContentView(scrollView);
+        dialog.setContentView(view);
+        if (view.getParent() != null) {
+            ((View) view.getParent()).setBackgroundColor(Color.TRANSPARENT);
+        }
         dialog.show();
     }
 
@@ -518,6 +560,10 @@ public class DrawActivity extends AppCompatActivity {
             b.setScaleX(isSelected ? 1.1f : 1.0f);
             b.setScaleY(isSelected ? 1.1f : 1.0f);
             
+            if (b.getBackground() != null) {
+                b.getBackground().mutate().setTint(isSelected ? android.graphics.Color.parseColor("#444444") : android.graphics.Color.WHITE);
+            }
+            
             if (b instanceof android.view.ViewGroup) {
                 android.view.ViewGroup vg = (android.view.ViewGroup) b;
                 for (int i = 0; i < vg.getChildCount(); i++) {
@@ -565,7 +611,7 @@ public class DrawActivity extends AppCompatActivity {
         super.onPause();
         isVisible = false;
         if (MoodService.getInstance() != null) {
-            MoodService.getInstance().setDrawingOverlayVisible(true);
+            MoodService.getInstance().setDrawingOverlayVisible(false);
         }
         if (drawingView != null) {
             drawingView.commitActiveObject();

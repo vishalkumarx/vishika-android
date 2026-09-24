@@ -109,6 +109,12 @@ public class ColorWheelView extends View {
         float dy = y - centerY;
         float dist = (float) Math.hypot(dx, dy);
         
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            if (getParent() != null) {
+                getParent().requestDisallowInterceptTouchEvent(true);
+            }
+        }
+        
         if (event.getAction() == MotionEvent.ACTION_DOWN || event.getAction() == MotionEvent.ACTION_MOVE) {
             if (dist > radius) {
                 // Clamp to circle

@@ -98,12 +98,27 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- View All Replies Button -->
+    <TextView
+        android:id="@+id/tvViewAllReplies"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="48dp"
+        android:layout_marginBottom="8dp"
+        android:text="View replies"
+        android:textColor="#1DA1F2"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone"
+        android:paddingVertical="4dp"/>
+
     <!-- Container for nested replies -->
     <LinearLayout
         android:id="@+id/layoutReplies"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_marginStart="48dp" />
+        android:layout_marginStart="48dp"
+        android:visibility="gone" />
 
 </LinearLayout>

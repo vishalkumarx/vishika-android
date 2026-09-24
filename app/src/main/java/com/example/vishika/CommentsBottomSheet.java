@@ -183,6 +183,7 @@ public class CommentsBottomSheet extends BottomSheetDialogFragment {
 
             if (replyingTo != null) {
                 commentsRef.child(replyingTo.id).child("replies").child(commentId).setValue(newComment);
+                adapter.expandComment(replyingTo.id);
 
                 // Notify reply
                 if (!replyingTo.authorId.equals(currentUserId)) {

@@ -10,6 +10,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
+import android.hardware.SensorManager;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
@@ -49,6 +50,7 @@ import java.text.ParseException;
 import java.util.List;
 import java.util.Locale;
 
+import com.bumptech.glide.load.resource.bitmap.CircleCrop;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -89,25 +91,25 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final int OVERLAY_PERMISSION_REQUEST_CODE = 2;
-    public static final boolean IS_VISHAL = true; // Toggle for testing
+    public static final boolean IS_VISHAL = true    ;
     
-    private String myDbNode = IS_VISHAL ? "locations/vishal" : "locations/rashika";
-    private String partnerDbNode = IS_VISHAL ? "locations/rashika" : "locations/vishal";
+    private String myDbNode;
+    private String partnerDbNode;
 
     private FusedLocationProviderClient fusedLocationClient;
         private static final String SUPABASE_URL = "https://rftikfmjugzckousuyda.supabase.co";
     private static final String SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmdGlrZm1qdWd6Y2tvdXN1eWRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNTQ3MTAsImV4cCI6MjEwMzgzMDcxMH0.esfpZIkGdf9CG-F_KpeYn3bx8xTqxOCoHJ-lbE0kk9Q";
     private MediaRecorder mediaRecorder;
     private String audioFilePath;
-    private boolean isRecording = false;
+    public static boolean isRecording = false;
     private DatabaseReference database;
     private LocationCallback locationCallback;
     
     private CountDownTimer birthdayTimer;
-    private double myLat = IS_VISHAL ? 31.663744 : 25.426241;
-    private double myLng = IS_VISHAL ? 74.928336 : 81.820452;
-    private double partnerLat = IS_VISHAL ? 25.426241 : 31.663744;
-    private double partnerLng = IS_VISHAL ? 81.820452 : 74.928336;
+    private double myLat;
+    private double myLng;
+    private double partnerLat;
+    private double partnerLng;
     private long partnerTimestamp = 0;
 
     // Locket (Daily Photo)
@@ -142,10 +144,169 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private Marker partnerMarker;
     private Polyline connectionLine;
 
+    private ActivityResultLauncher<Intent> updateApkPickerLauncher;
+    private ActivityResultLauncher<Intent> surpriseMediaPickerLauncher;
+    private ActivityResultLauncher<Intent> storyMediaPickerLauncher;
+    private ActivityResultLauncher<Intent> extractAudioPickerLauncher;
+    private String pendingSurpriseType;
+    private boolean isPartnerOnline = false;
+    
+    private List<Story> myStoriesList = new java.util.ArrayList<>();
+    private List<Story> partnerStoriesList = new java.util.ArrayList<>();
+
+    private void uploadSurpriseMediaToCloudinary(android.net.Uri mediaUri, String type) {
+
+        android.app.ProgressDialog progressDialog = new android.app.ProgressDialog(this);
+        progressDialog.setMessage("Uploading " + type + "...");
+        progressDialog.setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL);
+        progressDialog.setMax(100);
+        progressDialog.setCancelable(false);
+        progressDialog.show();
+        
+        new Thread(() -> {
+            try {
+                // Get file size for progress
+                long totalSize = 0;
+                try (android.database.Cursor cursor = getContentResolver().query(mediaUri, null, null, null, null)) {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        int sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE);
+                        if (sizeIndex != -1) {
+                            totalSize = cursor.getLong(sizeIndex);
+                        }
+                    }
+                }
+                if (totalSize == 0) {
+                    // Fallback to InputStream available
+                    java.io.InputStream tempIs = getContentResolver().openInputStream(mediaUri);
+                    if (tempIs != null) {
+                        totalSize = tempIs.available();
+                        tempIs.close();
+                    }
+                }
+                final long finalTotalSize = totalSize;
+                
+                String cloudName = "q7btslrv";
+                String uploadPreset = "vishika_uploads";
+                String urlString = "https://api.cloudinary.com/v1_1/" + cloudName + "/auto/upload";
+                
+                java.net.URL url = new java.net.URL(urlString);
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setDoOutput(true);
+                // Enable streaming mode to prevent OOM
+                if (finalTotalSize > 0) {
+                    // Approximate total length: file size + multipart overhead
+                    // For safety, let HttpURLConnection chunk it
+                    conn.setChunkedStreamingMode(4096);
+                }
+                
+                String boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+                conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+                
+                java.io.OutputStream os = conn.getOutputStream();
+                java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(os, "UTF-8"), true);
+                
+                writer.append("--").append(boundary).append("\r\n");
+                writer.append("Content-Disposition: form-data; name=\"upload_preset\"\r\n\r\n");
+                writer.append(uploadPreset).append("\r\n");
+                
+                writer.append("--").append(boundary).append("\r\n");
+                writer.append("Content-Disposition: form-data; name=\"file\"; filename=\"media\"\r\n");
+                writer.append("Content-Type: application/octet-stream\r\n\r\n");
+                writer.flush();
+                
+                java.io.InputStream is = getContentResolver().openInputStream(mediaUri);
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                long totalRead = 0;
+                while ((bytesRead = is.read(buffer)) != -1) {
+                    os.write(buffer, 0, bytesRead);
+                    totalRead += bytesRead;
+                    if (finalTotalSize > 0) {
+                        int progress = (int) ((totalRead * 100) / finalTotalSize);
+                        runOnUiThread(() -> progressDialog.setProgress(progress));
+                    }
+                }
+                os.flush();
+                is.close();
+                
+                writer.append("\r\n").append("--").append(boundary).append("--\r\n");
+                writer.close();
+                
+                int responseCode = conn.getResponseCode();
+                if (responseCode == 200) {
+                    java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream()));
+                    String inputLine;
+                    StringBuilder response = new StringBuilder();
+                    while ((inputLine = in.readLine()) != null) {
+                        response.append(inputLine);
+                    }
+                    in.close();
+                    
+                    org.json.JSONObject jsonResponse = new org.json.JSONObject(response.toString());
+                    String secureUrl = jsonResponse.getString("secure_url");
+                    
+                    runOnUiThread(() -> {
+                        progressDialog.dismiss();
+                        
+                        long timestamp = System.currentTimeMillis();
+                        String partnerName = IS_VISHAL ? "rashika" : "vishal";
+                        
+                        if ("Story".equals(type)) {
+                            // Save to stories node
+                            String sender = IS_VISHAL ? "vishal" : "rashika";
+                            DatabaseReference storyRef = FirebaseDatabase.getInstance().getReference("stories").child(sender);
+                            String storyId = storyRef.push().getKey();
+                            if (storyId != null) {
+                                Story story = new Story(storyId, secureUrl, pendingSurpriseType, timestamp);
+                                storyRef.child(storyId).setValue(story);
+                            }
+                            android.widget.Toast.makeText(MainActivity.this, "Story posted!", android.widget.Toast.LENGTH_SHORT).show();
+                        } else {
+                            String sender = IS_VISHAL ? "vishal" : "rashika";
+                            
+                            // Send to partner
+                            DatabaseReference surpriseRef = FirebaseDatabase.getInstance().getReference("surprise_box").child(partnerName);
+                            java.util.Map<String, Object> boxData = new java.util.HashMap<>();
+                            boxData.put("timestamp", timestamp);
+                            boxData.put("sender", sender);
+                            boxData.put("type", type);
+                            boxData.put("content", secureUrl);
+                            surpriseRef.push().setValue(boxData);
+                            
+                            android.widget.Toast.makeText(MainActivity.this, "Surprise Box sent! 🎁", android.widget.Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                } else {
+                    runOnUiThread(() -> {
+                        progressDialog.dismiss();
+                        android.widget.Toast.makeText(MainActivity.this, "Upload failed: " + responseCode, android.widget.Toast.LENGTH_SHORT).show();
+                    });
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> {
+                    progressDialog.dismiss();
+                    android.widget.Toast.makeText(MainActivity.this, "Upload error: " + e.getMessage(), android.widget.Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        myDbNode = IS_VISHAL ? "locations/vishal" : "locations/rashika";
+        partnerDbNode = IS_VISHAL ? "locations/rashika" : "locations/vishal";
+        myLat = IS_VISHAL ? 31.663744 : 25.426241;
+        myLng = IS_VISHAL ? 74.928336 : 81.820452;
+        partnerLat = IS_VISHAL ? 25.426241 : 31.663744;
+        partnerLng = IS_VISHAL ? 81.820452 : 74.928336;
+        
         setContentView(R.layout.activity_main);
+        
+        // Check for OTA updates
+        AutoUpdateHelper.checkForUpdates(this);
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             if (androidx.core.app.ActivityCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -196,11 +357,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         });
         
         navProfile.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, ProfileActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-            overridePendingTransition(0, 0);
+            startActivity(new Intent(MainActivity.this, ProfileActivity.class));
         });
+        
+        setupStories();
         
         navFeed.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, FeedActivity.class);
@@ -213,6 +373,86 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             Toast.makeText(this, "Centering map...", Toast.LENGTH_SHORT).show();
             updateDistanceUI();
         });
+        
+        btnRefreshMap.setOnLongClickListener(v -> {
+            startActivity(new Intent(MainActivity.this, LocationHistoryActivity.class));
+            return true;
+        });
+        
+        ImageView btnLocationHistory = findViewById(R.id.btnLocationHistory);
+        if (btnLocationHistory != null) {
+            btnLocationHistory.setOnClickListener(v -> {
+                startActivity(new Intent(MainActivity.this, LocationHistoryActivity.class));
+            });
+        }
+        
+        if (textLocationStatus != null) {
+            textLocationStatus.setOnLongClickListener(v -> {
+                startActivity(new Intent(MainActivity.this, LocationHistoryActivity.class));
+                return true;
+            });
+        }
+
+        updateApkPickerLauncher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        android.net.Uri uri = result.getData().getData();
+                        if (uri != null) {
+                            showUploadUpdateDialog(uri);
+                        }
+                    }
+                }
+        );
+        
+        storyMediaPickerLauncher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        android.net.Uri uri = result.getData().getData();
+                        if (uri != null) {
+                            uploadSurpriseMediaToCloudinary(uri, "Story");
+                        }
+                    }
+                }
+        );
+
+        surpriseMediaPickerLauncher = registerForActivityResult(
+            new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    android.net.Uri mediaUri = result.getData().getData();
+                    if (mediaUri != null && pendingSurpriseType != null) {
+                        uploadSurpriseMediaToCloudinary(mediaUri, pendingSurpriseType);
+                    }
+                }
+            }
+        );
+
+        extractAudioPickerLauncher = registerForActivityResult(
+            new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    android.net.Uri videoUri = result.getData().getData();
+                    if (videoUri != null) {
+                        processExtractedAudio(videoUri);
+                    }
+                }
+            }
+        );
+
+        android.widget.ImageView appLogo = findViewById(R.id.appLogo);
+        if (appLogo != null) {
+            appLogo.setOnLongClickListener(v -> {
+                if (IS_VISHAL) {
+                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.setType("application/vnd.android.package-archive");
+                    updateApkPickerLauncher.launch(intent);
+                    return true;
+                }
+                return false;
+            });
+        }
 
         database = FirebaseDatabase.getInstance().getReference();
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
@@ -223,6 +463,38 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 Intent intent = new Intent(MainActivity.this, DrawActivity.class);
                 intent.putExtra("IS_VISHAL", IS_VISHAL);
                 startActivity(intent);
+            });
+        }
+        
+        android.view.View btnSendSurprise = findViewById(R.id.btnSendSurprise);
+        if (btnSendSurprise != null) {
+            btnSendSurprise.setOnClickListener(v -> {
+                String[] options = {"📷 Send Photo", "📹 Send Video", "🎤 Send Voice Note"};
+                new android.app.AlertDialog.Builder(MainActivity.this)
+                    .setTitle("Pack your Surprise Box")
+                    .setItems(options, (dialog, which) -> {
+                        if (which == 0) {
+                            pendingSurpriseType = "Photo";
+                            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                            intent.setType("image/*");
+                            surpriseMediaPickerLauncher.launch(intent);
+                        } else if (which == 1) {
+                            pendingSurpriseType = "Video";
+                            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                            intent.setType("video/*");
+                            surpriseMediaPickerLauncher.launch(intent);
+                        } else if (which == 2) {
+                            showSurpriseVoiceDialog();
+                        }
+                    })
+                    .show();
+            });
+        }
+        
+        android.view.View btnGallery = findViewById(R.id.btnGallery);
+        if (btnGallery != null) {
+            btnGallery.setOnClickListener(v -> {
+                showGalleryPinDialog();
             });
         }
         
@@ -241,9 +513,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
 
         android.view.View btnPushToTalk = findViewById(R.id.btnPushToTalk);
-        TextView txtPushToTalk = findViewById(R.id.txtPushToTalk);
         audioFilePath = getExternalCacheDir().getAbsolutePath() + "/walkietalkie.m4a";
 
+        final long[] recordingStartTime = {0};
         if (btnPushToTalk != null) {
             btnPushToTalk.setOnTouchListener((v, event) -> {
                 if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
@@ -255,9 +527,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     case MotionEvent.ACTION_DOWN:
                         if (!isRecording) {
                             startRecording();
-                            txtPushToTalk.setText("Recording...");
-                            v.setBackgroundResource(R.drawable.bg_button_answer); // Add custom tint if you want
-                            v.setAlpha(0.7f);
+                            recordingStartTime[0] = System.currentTimeMillis();
+                            v.setPressed(true);
                             Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
                             if (vibrator != null) vibrator.vibrate(50);
                         }
@@ -265,9 +536,15 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_CANCEL:
                         if (isRecording) {
-                            stopRecordingAndUpload();
-                            txtPushToTalk.setText("Hold to Talk");
-                            v.setAlpha(1.0f);
+                            long duration = System.currentTimeMillis() - recordingStartTime[0];
+                            if (duration < 1000) {
+                                // Accidental press, cancel recording
+                                cancelRecording();
+                                Toast.makeText(this, "Hold longer to record voice note", Toast.LENGTH_SHORT).show();
+                            } else {
+                                stopRecordingAndUpload();
+                            }
+                            v.setPressed(false);
                         }
                         return true;
                 }
@@ -287,6 +564,130 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         setupPartnerProfileListener();
         checkPermissionsAndStart();
         calculateTogetherSince();
+    }
+    
+    private void showGalleryPinDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        android.view.View view = getLayoutInflater().inflate(R.layout.dialog_pin_entry, null);
+        builder.setView(view);
+        android.app.AlertDialog dialog = builder.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+            dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        }
+        
+        android.widget.EditText editPin = view.findViewById(R.id.editPin);
+        android.widget.TextView textPinMask = view.findViewById(R.id.textPinMask);
+        android.widget.Button btnUnlock = view.findViewById(R.id.btnUnlock);
+        
+        editPin.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+                StringBuilder mask = new StringBuilder();
+                int len = s.length();
+                for (int i = 0; i < 4; i++) {
+                    if (i > 0) mask.append(" ");
+                    if (i < len) {
+                        mask.append("❤");
+                    } else {
+                        mask.append("-");
+                    }
+                }
+                textPinMask.setText(mask.toString());
+                
+                if (len == 4) {
+                    btnUnlock.performClick();
+                }
+            }
+        });
+        
+        btnUnlock.setOnClickListener(v -> {
+            if ("2506".equals(editPin.getText().toString())) {
+                dialog.dismiss();
+                startActivity(new Intent(MainActivity.this, GalleryActivity.class));
+            } else {
+                android.widget.Toast.makeText(MainActivity.this, "Incorrect PIN!", android.widget.Toast.LENGTH_SHORT).show();
+                editPin.setText("");
+                
+                String partnerNode = IS_VISHAL ? "rashika" : "vishal";
+                String myName = IS_VISHAL ? "Vishal" : "Rashika";
+                String notifId = database.child("notifications").child(partnerNode).push().getKey();
+                if (notifId != null) {
+                    AppNotification notif = new AppNotification(
+                            notifId,
+                            "system",
+                            IS_VISHAL ? "vishal" : "rashika",
+                            myName,
+                            "tried to open the gallery with a wrong PIN! 😱",
+                            System.currentTimeMillis(),
+                            ""
+                    );
+                    database.child("notifications").child(partnerNode).child(notifId).setValue(notif);
+                }
+                
+                editPin.setText("");
+            }
+        });
+        
+        dialog.show();
+        editPin.requestFocus();
+    }
+    
+    private void showSurpriseVoiceDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("Record Voice Note");
+        builder.setMessage("Tap Start to begin recording.");
+        
+        final String voicePath = getExternalCacheDir().getAbsolutePath() + "/surprise_voice.m4a";
+        final android.media.MediaRecorder[] recorder = new android.media.MediaRecorder[1];
+        
+        builder.setPositiveButton("Start", null); 
+        builder.setNegativeButton("Cancel", (dialog, which) -> {
+            if (recorder[0] != null) {
+                try { recorder[0].stop(); } catch (Exception e) {}
+                recorder[0].release();
+            }
+        });
+        
+        android.app.AlertDialog dialog = builder.create();
+        dialog.show();
+        
+        android.widget.Button btnStart = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE);
+        btnStart.setOnClickListener(new android.view.View.OnClickListener() {
+            boolean recording = false;
+            @Override
+            public void onClick(android.view.View v) {
+                if (!recording) {
+                    if (androidx.core.app.ActivityCompat.checkSelfPermission(MainActivity.this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        androidx.core.app.ActivityCompat.requestPermissions(MainActivity.this, new String[]{android.Manifest.permission.RECORD_AUDIO}, 200);
+                        return;
+                    }
+                    try {
+                        recorder[0] = new android.media.MediaRecorder();
+                        recorder[0].setAudioSource(android.media.MediaRecorder.AudioSource.MIC);
+                        recorder[0].setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4);
+                        recorder[0].setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC);
+                        recorder[0].setOutputFile(voicePath);
+                        recorder[0].prepare();
+                        recorder[0].start();
+                        recording = true;
+                        btnStart.setText("Stop & Send");
+                        dialog.setMessage("Recording...");
+                    } catch (java.io.IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    try { recorder[0].stop(); } catch (Exception e) {}
+                    recorder[0].release();
+                    dialog.dismiss();
+                    uploadSurpriseMediaToCloudinary(android.net.Uri.fromFile(new java.io.File(voicePath)), "Voice");
+                }
+            }
+        });
     }
     
 
@@ -332,7 +733,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     // Sync my location to Firebase
                     database.child(myDbNode).child("lat").setValue(myLat);
                     database.child(myDbNode).child("lng").setValue(myLng);
-                    database.child(myDbNode).child("timestamp").setValue(System.currentTimeMillis());
+                    long timestamp = System.currentTimeMillis();
+                    database.child(myDbNode).child("timestamp").setValue(timestamp);
+                    
+                    // Push to location history
+                    String historyNode = IS_VISHAL ? "location_history/vishal" : "location_history/rashika";
+                    java.util.Map<String, Object> locData = new java.util.HashMap<>();
+                    locData.put("lat", myLat);
+                    locData.put("lng", myLng);
+                    locData.put("timestamp", timestamp);
+                    database.child(historyNode).push().setValue(locData);
                     
                     updateDistanceUI();
                 }
@@ -448,12 +858,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (partnerTimestamp == 0) {
             textLocationStatus.setText("Waiting for " + partnerName + " to share location...");
             textLocationStatus.setTextColor(android.graphics.Color.parseColor("#555555"));
-        } else if ((System.currentTimeMillis() - partnerTimestamp) > (15 * 60 * 1000)) {
-            String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date(partnerTimestamp));
-            textLocationStatus.setText(partnerName + " is offline (Last seen at " + timeStr + ")");
-            textLocationStatus.setTextColor(android.graphics.Color.parseColor("#888888")); // Subtle gray color
         } else {
-            textLocationStatus.setTextColor(android.graphics.Color.parseColor("#555555"));
+            String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date(partnerTimestamp));
+            if (!isPartnerOnline) {
+                textLocationStatus.setText(partnerName + " is offline (Last seen at " + timeStr + ")");
+                textLocationStatus.setTextColor(android.graphics.Color.parseColor("#888888")); // Subtle gray color
+            } else {
+                textLocationStatus.setText("Locating " + partnerName + "...");
+                textLocationStatus.setTextColor(android.graphics.Color.parseColor("#555555"));
+            }
+
             // Get city name using Geocoder asynchronously
             new Thread(() -> {
                 try {
@@ -462,42 +876,49 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     if (addresses != null && !addresses.isEmpty()) {
                         Address addr = addresses.get(0);
                         
-                        String feature = addr.getFeatureName();
-                        String subLocality = addr.getSubLocality();
-                        String locality = addr.getLocality();
-                        if (locality == null) locality = addr.getSubAdminArea();
-                        String state = addr.getAdminArea();
+                        String addressLine = addr.getAddressLine(0);
+                        String locationStr = "Unknown area";
                         
-                        StringBuilder locationBuilder = new StringBuilder();
-                        
-                        // Filter out Plus Codes (e.g. RWJH+XM6), pure street numbers, and duplicates
-                        if (feature != null) {
-                            if (feature.contains("+") || feature.matches("^[0-9\\-]+$") || feature.equals(locality) || feature.equals(subLocality) || feature.equals(state)) {
-                                feature = null;
+                        if (addressLine != null && !addressLine.isEmpty()) {
+                            locationStr = addressLine;
+                        } else {
+                            String feature = addr.getFeatureName();
+                            String subLocality = addr.getSubLocality();
+                            String locality = addr.getLocality();
+                            if (locality == null) locality = addr.getSubAdminArea();
+                            String state = addr.getAdminArea();
+                            
+                            StringBuilder locationBuilder = new StringBuilder();
+                            if (feature != null && !feature.contains("+") && !feature.matches("^[0-9\\-]+$") && !feature.equals(locality) && !feature.equals(subLocality) && !feature.equals(state)) {
+                                locationBuilder.append(feature).append(", ");
+                            } else if (subLocality != null && !subLocality.equals(locality)) {
+                                locationBuilder.append(subLocality).append(", ");
+                            }
+                            
+                            if (locality != null) {
+                                locationBuilder.append(locality);
+                            } else if (state != null) {
+                                locationBuilder.append(state);
+                            }
+                            
+                            if (locationBuilder.length() > 0) {
+                                locationStr = locationBuilder.toString();
                             }
                         }
                         
-                        if (feature != null) {
-                            locationBuilder.append(feature).append(", ");
-                        } else if (subLocality != null && !subLocality.equals(locality)) {
-                            locationBuilder.append(subLocality).append(", ");
+                        final String finalText;
+                        final int textColor;
+                        if (!isPartnerOnline) {
+                            finalText = partnerName + " was at " + locationStr + " before going offline (Last seen at " + timeStr + ")";
+                            textColor = android.graphics.Color.parseColor("#888888");
+                        } else {
+                            finalText = partnerName + " is at " + locationStr + " since " + timeStr;
+                            textColor = android.graphics.Color.parseColor("#555555");
                         }
-                        
-                        if (locality != null) {
-                            locationBuilder.append(locality);
-                        } else if (state != null) {
-                            locationBuilder.append(state);
-                        }
-                        
-                        if (locationBuilder.length() == 0) {
-                            locationBuilder.append("Unknown area");
-                        }
-                        
-                        String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date(partnerTimestamp));
-                        final String finalText = partnerName + " is at " + locationBuilder.toString() + " since " + timeStr;
                         
                         runOnUiThread(() -> {
                             textLocationStatus.setText(finalText);
+                            textLocationStatus.setTextColor(textColor);
                         });
                     }
                 } catch (Exception e) {
@@ -661,6 +1082,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             public void onDataChange(@NonNull DataSnapshot snapshot) {
                 Boolean isOnline = snapshot.getValue(Boolean.class);
                 boolean online = isOnline != null && isOnline;
+                isPartnerOnline = online;
                 
                 android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
                 gd.setShape(android.graphics.drawable.GradientDrawable.OVAL);
@@ -668,6 +1090,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 statusDot.setBackground(gd);
                 
                 statusText.setText(online ? partnerDisplayName + " is Online" : partnerDisplayName + " is Offline");
+                updateDistanceUI();
             }
 
             @Override
@@ -683,6 +1106,291 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         findViewById(R.id.soundBtn1).setOnClickListener(v -> sendSound(partnerName, "android.resource://" + pkg + "/" + R.raw.audio_1));
         findViewById(R.id.soundBtn2).setOnClickListener(v -> sendSound(partnerName, "android.resource://" + pkg + "/" + R.raw.audio_2));
         findViewById(R.id.soundBtn3).setOnClickListener(v -> sendSound(partnerName, "android.resource://" + pkg + "/" + R.raw.audio_3));
+        
+        android.view.View extractBtn = findViewById(R.id.soundBtnExtract);
+        if (extractBtn != null) {
+            extractBtn.setOnClickListener(v -> {
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.setType("video/*");
+                extractAudioPickerLauncher.launch(intent);
+            });
+        }
+    }
+
+    private void processExtractedAudio(android.net.Uri videoUri) {
+        android.app.ProgressDialog progress = new android.app.ProgressDialog(this);
+        progress.setMessage("Extracting Audio...");
+        progress.setCancelable(false);
+        progress.show();
+
+        String outPath = getExternalCacheDir().getAbsolutePath() + "/extracted_audio.m4a";
+
+        new Thread(() -> {
+            try {
+                android.media.MediaExtractor extractor = new android.media.MediaExtractor();
+                extractor.setDataSource(this, videoUri, null);
+
+                int audioTrackIndex = -1;
+                for (int i = 0; i < extractor.getTrackCount(); i++) {
+                    android.media.MediaFormat format = extractor.getTrackFormat(i);
+                    String mime = format.getString(android.media.MediaFormat.KEY_MIME);
+                    if (mime != null && mime.startsWith("audio/")) {
+                        audioTrackIndex = i;
+                        break;
+                    }
+                }
+
+                if (audioTrackIndex == -1) {
+                    extractor.release();
+                    runOnUiThread(() -> {
+                        progress.dismiss();
+                        Toast.makeText(MainActivity.this, "No audio track found in video", Toast.LENGTH_SHORT).show();
+                    });
+                    return;
+                }
+
+                extractor.selectTrack(audioTrackIndex);
+                android.media.MediaFormat format = extractor.getTrackFormat(audioTrackIndex);
+                
+                android.media.MediaMuxer muxer = new android.media.MediaMuxer(outPath, android.media.MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+                int writeTrackIndex = muxer.addTrack(format);
+                muxer.start();
+
+                int bufferSize = 256 * 1024;
+                java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate(bufferSize);
+                android.media.MediaCodec.BufferInfo bufferInfo = new android.media.MediaCodec.BufferInfo();
+
+                while (true) {
+                    bufferInfo.size = extractor.readSampleData(buffer, 0);
+                    if (bufferInfo.size < 0) {
+                        break;
+                    }
+                    bufferInfo.presentationTimeUs = extractor.getSampleTime();
+                    bufferInfo.flags = extractor.getSampleFlags();
+
+                    muxer.writeSampleData(writeTrackIndex, buffer, bufferInfo);
+                    extractor.advance();
+                }
+
+                muxer.stop();
+                muxer.release();
+                extractor.release();
+
+                runOnUiThread(() -> {
+                    progress.dismiss();
+                    showAudioPreviewDialog(outPath);
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> {
+                    progress.dismiss();
+                    Toast.makeText(MainActivity.this, "Extraction failed", Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+    
+    private void showAudioPreviewDialog(String audioPath) {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("Preview Sound");
+        
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(50, 40, 50, 40);
+        layout.setGravity(android.view.Gravity.CENTER);
+        
+        android.widget.Button btnPlay = new android.widget.Button(this);
+        btnPlay.setText("▶ Play Preview");
+        layout.addView(btnPlay);
+        
+        builder.setView(layout);
+        
+        final android.media.MediaPlayer[] player = new android.media.MediaPlayer[1];
+        
+        btnPlay.setOnClickListener(v -> {
+            try {
+                if (player[0] != null) {
+                    if (player[0].isPlaying()) {
+                        player[0].stop();
+                        btnPlay.setText("▶ Play Preview");
+                    } else {
+                        player[0].release();
+                        player[0] = null;
+                    }
+                }
+                
+                if (player[0] == null) {
+                    player[0] = new android.media.MediaPlayer();
+                    player[0].setDataSource(audioPath);
+                    player[0].prepare();
+                    player[0].start();
+                    btnPlay.setText("⏹ Stop Preview");
+                    player[0].setOnCompletionListener(mp -> {
+                        btnPlay.setText("▶ Play Preview");
+                    });
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+        
+        builder.setPositiveButton("Send", (dialog, which) -> {
+            if (player[0] != null) {
+                try { player[0].stop(); } catch (Exception e) {}
+                player[0].release();
+            }
+            uploadSoundToSupabase(android.net.Uri.fromFile(new java.io.File(audioPath)));
+        });
+        builder.setNegativeButton("Cancel", (dialog, which) -> {
+            if (player[0] != null) {
+                try { player[0].stop(); } catch (Exception e) {}
+                player[0].release();
+            }
+        });
+        
+        android.app.AlertDialog dialog = builder.create();
+        dialog.setOnDismissListener(d -> {
+            if (player[0] != null) {
+                try { player[0].stop(); } catch (Exception e) {}
+                player[0].release();
+                player[0] = null;
+            }
+        });
+        dialog.show();
+    }
+    
+    private void uploadSoundToSupabase(android.net.Uri audioUri) {
+        android.app.ProgressDialog progressDialog = new android.app.ProgressDialog(this);
+        progressDialog.setMessage("Uploading Sound...");
+        progressDialog.setCancelable(false);
+        progressDialog.show();
+        
+        new Thread(() -> {
+            try {
+                java.io.File file = new java.io.File(audioUri.getPath());
+                String filename = "custom_sound_" + System.currentTimeMillis() + ".m4a";
+                String bucket = "profile_images"; 
+                String uploadUrl = SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + filename;
+                
+                okhttp3.OkHttpClient client = new okhttp3.OkHttpClient();
+                okhttp3.RequestBody body = okhttp3.RequestBody.create(file, okhttp3.MediaType.parse("audio/mp4"));
+                
+                okhttp3.Request request = new okhttp3.Request.Builder()
+                        .url(uploadUrl)
+                        .post(body)
+                        .addHeader("Authorization", "Bearer " + SUPABASE_KEY)
+                        .addHeader("apikey", SUPABASE_KEY)
+                        .addHeader("Content-Type", "audio/mp4")
+                        .build();
+                        
+                client.newCall(request).enqueue(new okhttp3.Callback() {
+                    @Override
+                    public void onFailure(@NonNull okhttp3.Call call, @NonNull java.io.IOException e) {
+                        e.printStackTrace();
+                        runOnUiThread(() -> {
+                            progressDialog.dismiss();
+                            Toast.makeText(MainActivity.this, "Upload failed", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+
+                    @Override
+                    public void onResponse(@NonNull okhttp3.Call call, @NonNull okhttp3.Response response) throws java.io.IOException {
+                        if (response.isSuccessful()) {
+                            String publicUrl = SUPABASE_URL + "/storage/v1/object/public/" + bucket + "/" + filename;
+                            runOnUiThread(() -> {
+                                progressDialog.dismiss();
+                                sendExtractedSound(IS_VISHAL ? "rashika" : "vishal", publicUrl, filename);
+                            });
+                        } else {
+                            String err = response.body() != null ? response.body().string() : "Unknown error";
+                            runOnUiThread(() -> {
+                                progressDialog.dismiss();
+                                Toast.makeText(MainActivity.this, "Upload failed: " + response.code() + " " + err, Toast.LENGTH_LONG).show();
+                            });
+                        }
+                        response.close();
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> {
+                    progressDialog.dismiss();
+                    Toast.makeText(MainActivity.this, "Upload error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+            }
+        }).start();
+    }
+
+    private void sendExtractedSound(String partnerName, String url, String filename) {
+        String soundId = database.child("sounds").child(partnerName).push().getKey();
+        if (soundId != null) {
+            database.child("sounds").child(partnerName).child(soundId).child("url").setValue(url);
+            database.child("sounds").child(partnerName).child(soundId).child("timestamp").setValue(System.currentTimeMillis());
+            if (filename != null && !filename.isEmpty()) {
+                database.child("sounds").child(partnerName).child(soundId).child("delete_token").setValue(filename);
+            }
+            
+            android.os.Vibrator v = (android.os.Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            if (v != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    v.vibrate(android.os.VibrationEffect.createOneShot(50, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+                } else {
+                    v.vibrate(50);
+                }
+            }
+
+            final DatabaseReference soundRef = database.child("sounds").child(partnerName).child(soundId);
+            final boolean[] delivered = {false};
+            final ValueEventListener deliveryListener = new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    if (!snapshot.exists()) {
+                        delivered[0] = true;
+                        soundRef.removeEventListener(this);
+                        showDeliveryDialog("Delivered 🎵", "Your custom sound reached " + (IS_VISHAL ? "Rashika" : "Vishal") + " successfully.", true);
+                    }
+                }
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {}
+            };
+            soundRef.addValueEventListener(deliveryListener);
+            
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                if (!delivered[0]) {
+                    soundRef.removeEventListener(deliveryListener);
+                    soundRef.removeValue();
+                    
+                    if (filename != null && !filename.isEmpty()) {
+                        deleteSupabaseFile(filename);
+                    }
+                    
+                    if (!isFinishing() && !isDestroyed()) {
+                        showDeliveryDialog("Not Delivered", (IS_VISHAL ? "Rashika" : "Vishal") + " is offline. The custom sound was deleted.", false);
+                    }
+                }
+            }, 10000);
+        }
+    }
+
+    private void deleteSupabaseFile(String filename) {
+        new Thread(() -> {
+            try {
+                String bucket = "profile_images";
+                String urlString = SUPABASE_URL + "/storage/v1/object/" + bucket + "/" + filename;
+                
+                okhttp3.OkHttpClient client = new okhttp3.OkHttpClient();
+                okhttp3.Request request = new okhttp3.Request.Builder()
+                        .url(urlString)
+                        .delete()
+                        .addHeader("Authorization", "Bearer " + SUPABASE_KEY)
+                        .addHeader("apikey", SUPABASE_KEY)
+                        .build();
+                        
+                client.newCall(request).execute().close();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
     }
 
     private void sendSound(String partnerName, String url) {
@@ -886,6 +1594,23 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             isRecording = true;
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private void cancelRecording() {
+        if (mediaRecorder != null) {
+            try {
+                mediaRecorder.stop();
+            } catch (RuntimeException stopException) {
+                // handle small touches where stop fails
+            }
+            mediaRecorder.release();
+            mediaRecorder = null;
+            isRecording = false;
+        }
+        File file = new File(audioFilePath);
+        if (file.exists()) {
+            file.delete();
         }
     }
 
@@ -1118,7 +1843,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                     android.net.Uri croppedUri = UCrop.getOutput(result.getData());
                     if (croppedUri != null) {
-                        uploadLocketPhoto(croppedUri);
+                        uploadLocketPhoto(croppedUri, false);
                     }
                 }
             }
@@ -1128,6 +1853,19 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             new ActivityResultContracts.GetContent(),
             uri -> {
                 if (uri != null) {
+                    boolean isGif = false;
+                    String mimeType = getContentResolver().getType(uri);
+                    if (mimeType != null && mimeType.toLowerCase().contains("gif")) {
+                        isGif = true;
+                    } else if (uri.toString().toLowerCase().endsWith(".gif")) {
+                        isGif = true;
+                    }
+                    
+                    if (isGif) {
+                        uploadLocketPhoto(uri, true);
+                        return;
+                    }
+
                     String destFileName = "ucrop_" + System.currentTimeMillis() + ".jpg";
                     android.net.Uri destUri = android.net.Uri.fromFile(new java.io.File(getCacheDir(), destFileName));
                     
@@ -1167,41 +1905,67 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
     }
 
-    private void uploadLocketPhoto(Uri uri) {
+    private void uploadLocketPhoto(Uri uri, boolean isGif) {
         Toast.makeText(this, "Uploading photo...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
                 InputStream is = getContentResolver().openInputStream(uri);
                 if (is == null) return;
-                Bitmap bmp = BitmapFactory.decodeStream(is);
-                is.close();
+                
+                byte[] imageBytes;
+                String ext;
+                String mime;
+                
+                if (isGif) {
+                    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                    int nRead;
+                    byte[] data = new byte[16384];
+                    while ((nRead = is.read(data, 0, data.length)) != -1) {
+                        buffer.write(data, 0, nRead);
+                    }
+                    imageBytes = buffer.toByteArray();
+                    ext = ".gif";
+                    mime = "image/gif";
+                    is.close();
+                } else {
+                    Bitmap bmp = BitmapFactory.decodeStream(is);
+                    is.close();
 
-                // Scale down to max 800px wide to keep size manageable
-                int maxW = 800;
-                if (bmp.getWidth() > maxW) {
-                    float ratio = (float) maxW / bmp.getWidth();
-                    bmp = Bitmap.createScaledBitmap(bmp,
-                            maxW, Math.round(bmp.getHeight() * ratio), true);
+                    if (bmp == null) {
+                        runOnUiThread(() -> Toast.makeText(MainActivity.this,
+                            "Failed to decode image", Toast.LENGTH_LONG).show());
+                        return;
+                    }
+
+                    // Scale down to max 800px wide to keep size manageable
+                    int maxW = 800;
+                    if (bmp.getWidth() > maxW) {
+                        float ratio = (float) maxW / bmp.getWidth();
+                        bmp = Bitmap.createScaledBitmap(bmp,
+                                maxW, Math.round(bmp.getHeight() * ratio), true);
+                    }
+
+                    // Compress to JPEG
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    bmp.compress(Bitmap.CompressFormat.JPEG, 75, baos);
+                    imageBytes = baos.toByteArray();
+                    ext = ".jpg";
+                    mime = "image/jpeg";
                 }
 
-                // Compress to JPEG
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                bmp.compress(Bitmap.CompressFormat.JPEG, 75, baos);
-                byte[] imageBytes = baos.toByteArray();
-
                 String who      = IS_VISHAL ? "vishal" : "rashika";
-                String filename = who + "_locket_" + System.currentTimeMillis() + ".jpg";
+                String filename = who + "_locket_" + System.currentTimeMillis() + ext;
                 // Upload flat into the bucket root (same as voice notes)
                 String uploadUrl = SUPABASE_URL + "/storage/v1/object/profile_images/" + filename;
 
                 OkHttpClient client = new OkHttpClient();
-                RequestBody body = RequestBody.create(imageBytes, MediaType.parse("image/jpeg"));
+                RequestBody body = RequestBody.create(imageBytes, MediaType.parse(mime));
                 Request request = new Request.Builder()
                     .url(uploadUrl)
                     .post(body)   // POST like voice notes – works reliably
                     .addHeader("Authorization", "Bearer " + SUPABASE_KEY)
                     .addHeader("apikey", SUPABASE_KEY)
-                    .addHeader("Content-Type", "image/jpeg")
+                    .addHeader("Content-Type", mime)
                     .build();
 
                 Response response = client.newCall(request).execute();
@@ -1390,5 +2154,332 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 }
             });
         });
+    }
+    private void setupStories() {
+        String myNameId = IS_VISHAL ? "vishal" : "rashika";
+        String partnerNameId = IS_VISHAL ? "rashika" : "vishal";
+        
+        android.widget.TextView txtPartnerStoryLabel = findViewById(R.id.txtPartnerStoryLabel);
+        txtPartnerStoryLabel.setText((IS_VISHAL ? "Rashika" : "Vishal") + "'s Story");
+
+        // Fetch Profile Pictures
+        DatabaseReference myProfileRef = FirebaseDatabase.getInstance().getReference().child("profiles").child(myNameId);
+        DatabaseReference partnerProfileRef = FirebaseDatabase.getInstance().getReference().child("profiles").child(partnerNameId);
+        
+        myProfileRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                String imgUrl = snapshot.child("imageUrl").getValue(String.class);
+                ImageView imgMyStoryProfile = findViewById(R.id.imgMyStoryProfile);
+                Object loadSource = (imgUrl != null && !imgUrl.isEmpty()) ? imgUrl : R.drawable.ic_photo_placeholder;
+                Glide.with(MainActivity.this)
+                     .load(loadSource)
+                     .placeholder(R.drawable.ic_photo_placeholder)
+                     .error(R.drawable.ic_photo_placeholder)
+                     .transform(new CircleCrop())
+                     .into(imgMyStoryProfile);
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+        
+        partnerProfileRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                String imgUrl = snapshot.child("imageUrl").getValue(String.class);
+                ImageView imgPartnerStoryProfile = findViewById(R.id.imgPartnerStoryProfile);
+                Object loadSource = (imgUrl != null && !imgUrl.isEmpty()) ? imgUrl : R.drawable.ic_photo_placeholder;
+                Glide.with(MainActivity.this)
+                     .load(loadSource)
+                     .placeholder(R.drawable.ic_photo_placeholder)
+                     .error(R.drawable.ic_photo_placeholder)
+                     .transform(new CircleCrop())
+                     .into(imgPartnerStoryProfile);
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+
+        // Fetch Stories
+        DatabaseReference myStoriesRef = FirebaseDatabase.getInstance().getReference().child("stories").child(myNameId);
+        DatabaseReference partnerStoriesRef = FirebaseDatabase.getInstance().getReference().child("stories").child(partnerNameId);
+        
+        long twentyFourHoursAgo = System.currentTimeMillis() - (24 * 60 * 60 * 1000);
+        
+        myStoriesRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                myStoriesList.clear();
+                for (DataSnapshot ds : snapshot.getChildren()) {
+                    Story s = ds.getValue(Story.class);
+                    if (s != null) {
+                        if (s.getTimestamp() > twentyFourHoursAgo) {
+                            myStoriesList.add(s);
+                        } else {
+                            ds.getRef().removeValue(); // Clean up expired
+                        }
+                    }
+                }
+                updateStoryRings();
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+        
+        partnerStoriesRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                partnerStoriesList.clear();
+                for (DataSnapshot ds : snapshot.getChildren()) {
+                    Story s = ds.getValue(Story.class);
+                    if (s != null) {
+                        if (s.getTimestamp() > twentyFourHoursAgo) {
+                            partnerStoriesList.add(s);
+                        } else {
+                            ds.getRef().removeValue(); // Clean up expired
+                        }
+                    }
+                }
+                updateStoryRings();
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+
+        // Click Listeners
+        findViewById(R.id.btnMyStory).setOnClickListener(v -> {
+            if (myStoriesList.isEmpty()) {
+                openStoryPicker();
+            } else {
+                View myStoryRing = findViewById(R.id.myStoryRing);
+                animateRing(myStoryRing);
+                preloadFirstStoryAndOpen(myStoriesList, myNameId);
+            }
+        });
+        
+        findViewById(R.id.imgAddStory).setOnClickListener(v -> {
+            openStoryPicker();
+        });
+        
+        findViewById(R.id.btnPartnerStory).setOnClickListener(v -> {
+            if (!partnerStoriesList.isEmpty()) {
+                View partnerStoryRing = findViewById(R.id.partnerStoryRing);
+                animateRing(partnerStoryRing);
+                preloadFirstStoryAndOpen(partnerStoriesList, partnerNameId);
+            } else {
+                android.widget.Toast.makeText(MainActivity.this, "No active stories", android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private android.animation.ObjectAnimator locketAnimator;
+    private com.bumptech.glide.request.target.CustomTarget<android.graphics.Bitmap> storyPreloadTarget;
+    private SensorManager sensorManager;
+
+    private void animateRing(View ring) {
+        android.animation.ObjectAnimator animator = android.animation.ObjectAnimator.ofFloat(ring, "rotation", 0f, 360f);
+        animator.setDuration(800);
+        animator.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        animator.setInterpolator(new android.view.animation.LinearInterpolator());
+        animator.start();
+        ring.setTag(animator);
+    }
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
+        View myStoryRing = findViewById(R.id.myStoryRing);
+        if (myStoryRing != null && myStoryRing.getTag() instanceof android.animation.ObjectAnimator) {
+            ((android.animation.ObjectAnimator) myStoryRing.getTag()).cancel();
+            myStoryRing.setRotation(0f);
+        }
+        View partnerStoryRing = findViewById(R.id.partnerStoryRing);
+        if (partnerStoryRing != null && partnerStoryRing.getTag() instanceof android.animation.ObjectAnimator) {
+            ((android.animation.ObjectAnimator) partnerStoryRing.getTag()).cancel();
+            partnerStoryRing.setRotation(0f);
+        }
+        updateStoryRings();
+    }
+    
+    private void updateStoryRings() {
+        String myNameId = IS_VISHAL ? "vishal" : "rashika";
+        String partnerNameId = IS_VISHAL ? "rashika" : "vishal";
+        
+        android.content.SharedPreferences prefs = getSharedPreferences("vishika_prefs", MODE_PRIVATE);
+        
+        View myStoryRing = findViewById(R.id.myStoryRing);
+        if (myStoriesList.isEmpty()) {
+            myStoryRing.setBackgroundResource(0);
+        } else {
+            long lastSeenMy = prefs.getLong("lastSeenStory_" + myNameId, 0);
+            boolean hasNewMy = false;
+            for (Story s : myStoriesList) {
+                if (s.getTimestamp() > lastSeenMy) {
+                    hasNewMy = true;
+                    break;
+                }
+            }
+            myStoryRing.setBackgroundResource(hasNewMy ? R.drawable.bg_story_ring_active : R.drawable.bg_story_ring_inactive);
+        }
+        
+        View partnerStoryRing = findViewById(R.id.partnerStoryRing);
+        if (partnerStoriesList.isEmpty()) {
+            partnerStoryRing.setBackgroundResource(0);
+        } else {
+            long lastSeenPartner = prefs.getLong("lastSeenStory_" + partnerNameId, 0);
+            boolean hasNewPartner = false;
+            for (Story s : partnerStoriesList) {
+                if (s.getTimestamp() > lastSeenPartner) {
+                    hasNewPartner = true;
+                    break;
+                }
+            }
+            partnerStoryRing.setBackgroundResource(hasNewPartner ? R.drawable.bg_story_ring_active : R.drawable.bg_story_ring_inactive);
+        }
+    }
+    
+    private void preloadFirstStoryAndOpen(java.util.List<Story> storiesList, String userId) {
+        if (storiesList == null || storiesList.isEmpty()) {
+            openStoryViewer(userId, storiesList);
+            return;
+        }
+        
+        int startIndex = 0;
+        long lastSeen = getSharedPreferences("vishika_prefs", MODE_PRIVATE).getLong("lastSeenStory_" + userId, 0);
+        for (int i = 0; i < storiesList.size(); i++) {
+            if (storiesList.get(i).getTimestamp() > lastSeen) {
+                startIndex = i;
+                break;
+            }
+        }
+        
+        Story storyToLoad = storiesList.get(startIndex);
+        if (storyToLoad.getUrl() == null || storyToLoad.getUrl().isEmpty()) {
+            openStoryViewer(userId, storiesList);
+            return;
+        }
+
+        if ("Photo".equals(storyToLoad.getType())) {
+            storyPreloadTarget = new com.bumptech.glide.request.target.CustomTarget<android.graphics.Bitmap>() {
+                @Override
+                public void onResourceReady(@NonNull android.graphics.Bitmap resource, @androidx.annotation.Nullable com.bumptech.glide.request.transition.Transition<? super android.graphics.Bitmap> transition) {
+                    openStoryViewer(userId, storiesList);
+                    storyPreloadTarget = null;
+                }
+
+                @Override
+                public void onLoadCleared(@androidx.annotation.Nullable android.graphics.drawable.Drawable placeholder) {}
+
+                @Override
+                public void onLoadFailed(@androidx.annotation.Nullable android.graphics.drawable.Drawable errorDrawable) {
+                    openStoryViewer(userId, storiesList); // Fallback
+                    storyPreloadTarget = null;
+                }
+            };
+            
+            Glide.with(this)
+                .asBitmap()
+                .load(storyToLoad.getUrl())
+                .into(storyPreloadTarget);
+        } else {
+            // For video, we just open it directly
+            openStoryViewer(userId, storiesList);
+        }
+    }
+    
+    private void openStoryPicker() {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Add to Story")
+                .setItems(new CharSequence[]{"Photo", "Video"}, (dialog, which) -> {
+                    pendingSurpriseType = which == 0 ? "Photo" : "Video";
+                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                    intent.setType(which == 0 ? "image/*" : "video/*");
+                    storyMediaPickerLauncher.launch(intent);
+                }).show();
+    }
+    
+    private void openStoryViewer(String userId, java.util.List<Story> storiesList) {
+        Intent intent = new Intent(this, StoryViewerActivity.class);
+        intent.putExtra("USER_ID", userId);
+        if (storiesList != null && storiesList instanceof java.util.ArrayList) {
+            intent.putExtra("STORIES_LIST", (java.util.ArrayList<Story>) storiesList);
+        }
+        startActivity(intent);
+    }
+    
+    private void showUploadUpdateDialog(android.net.Uri apkUri) {
+        android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
+        layout.setOrientation(android.widget.LinearLayout.VERTICAL);
+        layout.setPadding(50, 40, 50, 10);
+
+        final android.widget.EditText versionCodeInput = new android.widget.EditText(this);
+        versionCodeInput.setHint("Version Code (e.g. 18)");
+        versionCodeInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        
+        final android.widget.EditText releaseNotesInput = new android.widget.EditText(this);
+        releaseNotesInput.setHint("Release Notes");
+        
+        layout.addView(versionCodeInput);
+        layout.addView(releaseNotesInput);
+
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Upload Update")
+            .setView(layout)
+            .setPositiveButton("Upload", (dialog, which) -> {
+                String vCodeStr = versionCodeInput.getText().toString();
+                String releaseNotes = releaseNotesInput.getText().toString();
+                if (!vCodeStr.isEmpty()) {
+                    int vCode = Integer.parseInt(vCodeStr);
+                    uploadUpdateToSupabase(apkUri, vCode, releaseNotes);
+                }
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void uploadUpdateToSupabase(android.net.Uri apkUri, int versionCode, String releaseNotes) {
+        Toast.makeText(this, "Uploading update...", Toast.LENGTH_LONG).show();
+        
+        new Thread(() -> {
+            try {
+                java.io.InputStream inputStream = getContentResolver().openInputStream(apkUri);
+                byte[] fileBytes = new byte[inputStream.available()];
+                inputStream.read(fileBytes);
+                inputStream.close();
+
+                String filename = "vishika_v" + versionCode + ".apk";
+                String uploadUrl = SUPABASE_URL + "/storage/v1/object/app_updates/" + filename;
+
+                okhttp3.RequestBody requestBody = okhttp3.RequestBody.create(okhttp3.MediaType.parse("application/vnd.android.package-archive"), fileBytes);
+                okhttp3.Request request = new okhttp3.Request.Builder()
+                        .url(uploadUrl)
+                        .post(requestBody)
+                        .addHeader("Authorization", "Bearer " + SUPABASE_KEY)
+                        .addHeader("apikey", SUPABASE_KEY)
+                        .build();
+
+                okhttp3.OkHttpClient client = new okhttp3.OkHttpClient();
+                okhttp3.Response response = client.newCall(request).execute();
+
+                if (response.isSuccessful()) {
+                    String publicDownloadUrl = SUPABASE_URL + "/storage/v1/object/public/app_updates/" + filename;
+                    
+                    java.util.Map<String, Object> updateMap = new java.util.HashMap<>();
+                    updateMap.put("latest_version_code", versionCode);
+                    updateMap.put("download_url", publicDownloadUrl);
+                    updateMap.put("release_notes", releaseNotes);
+                    
+                    FirebaseDatabase.getInstance().getReference("app_update/vishal").setValue(updateMap);
+                    FirebaseDatabase.getInstance().getReference("app_update/rashika").setValue(updateMap);
+                    
+                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "Update published successfully!", Toast.LENGTH_LONG).show());
+                } else {
+                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "Upload failed: " + response.message(), Toast.LENGTH_LONG).show());
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error uploading update", Toast.LENGTH_LONG).show());
+            }
+        }).start();
     }
 }

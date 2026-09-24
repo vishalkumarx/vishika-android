@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Dimmed Background for unboxing -->
+    <View
+        android:id="@+id/surpriseDimBackground"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#99000000"
+        android:visibility="gone"/>
+
+    <!-- The actual content revealed from the box -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/surpriseContentCard"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="16dp"
+        app:cardBackgroundColor="#FFFFFF"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="24dp">
+            
+            <TextView
+                android:id="@+id/surpriseContentTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Surprise!"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:textColor="#FF5C81"
+                android:layout_marginBottom="16dp"/>
+
+            <ImageView
+                android:id="@+id/surpriseContentImage"
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:scaleType="centerCrop"
+                android:visibility="gone"
+                android:layout_marginBottom="16dp"/>
+
+            <VideoView
+                android:id="@+id/surpriseContentVideo"
+                android:layout_width="200dp"
+                android:layout_height="200dp"
+                android:visibility="gone"
+                android:layout_marginBottom="16dp"/>
+                
+            <ImageButton
+                android:id="@+id/btnPlayVoiceSurprise"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:src="@android:drawable/ic_media_play"
+                android:background="@drawable/bg_button_answer"
+                android:tint="#FFFFFF"
+                android:visibility="gone"
+                android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:id="@+id/surpriseContentText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="You got a message!"
+                android:textSize="20sp"
+                android:textColor="#2D2036"
+                android:textAlignment="center"
+                android:layout_marginBottom="24dp"/>
+
+            <ProgressBar
+                android:id="@+id/surpriseLoadingProgress"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone"
+                android:indeterminateTint="#FF5C81" />
+                
+            <TextView
+                android:id="@+id/surpriseProgressText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0%"
+                android:textSize="14sp"
+                android:textColor="#FF5C81"
+                android:textStyle="bold"
+                android:visibility="gone"
+                android:layout_marginBottom="16dp"/>
+
+            <Button
+                android:id="@+id/btnSurpriseClose"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Close"
+                android:backgroundTint="#FF5C81"
+                android:textColor="#FFFFFF" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- The initial floating box that can be tapped -->
+    <LinearLayout
+        android:id="@+id/surpriseBoxContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="12dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="100dp"
+        android:layout_marginEnd="16dp">
+
+        <androidx.cardview.widget.CardView
+            android:id="@+id/surpriseBoxCard"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            app:cardCornerRadius="40dp"
+            app:cardElevation="8dp"
+            app:cardBackgroundColor="#FFF0F5">
+            
+            <TextView
+                android:id="@+id/surpriseIcon"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:text="🎁"
+                android:textSize="48sp"
+                android:gravity="center" />
+        </androidx.cardview.widget.CardView>
+        
+        <TextView
+            android:id="@+id/surpriseTextLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tap to open!"
+            android:textColor="#FF5C81"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:shadowColor="#FFFFFF"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="3"
+            android:layout_marginTop="8dp"/>
+    </LinearLayout>
+
+</FrameLayout>

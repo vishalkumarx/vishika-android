@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="300dp"
+    android:layout_height="wrap_content"
+    android:layout_gravity="center"
+    app:cardCornerRadius="24dp"
+    app:cardBackgroundColor="#FFF0F5"
+    app:cardElevation="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Secure Gallery"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="#FF5C81"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Enter PIN to unlock"
+            android:textSize="16sp"
+            android:textColor="#2D2036"
+            android:layout_marginBottom="24dp"/>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_button_answer"
+            android:padding="16dp"
+            android:layout_marginBottom="24dp">
+
+            <TextView
+                android:id="@+id/textPinMask"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAlignment="center"
+                android:textSize="24sp"
+                android:letterSpacing="0.3"
+                android:textStyle="bold"
+                android:text="- - - -"
+                android:textColor="#212121"
+                android:layout_gravity="center"/>
+
+            <EditText
+                android:id="@+id/editPin"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@android:color/transparent"
+                android:layout_gravity="center"
+                android:inputType="number"
+                android:maxLength="4"
+                android:textAlignment="center"
+                android:textSize="24sp"
+                android:textColor="@android:color/transparent"
+                android:cursorVisible="false"/>
+        </FrameLayout>
+
+        <Button
+            android:id="@+id/btnUnlock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:backgroundTint="#FF5C81"
+            android:text="Unlock"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:padding="12dp"/>
+
+    </LinearLayout>
+</androidx.cardview.widget.CardView>

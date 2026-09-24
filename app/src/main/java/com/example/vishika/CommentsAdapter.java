@@ -21,7 +21,9 @@ import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class CommentsAdapter extends RecyclerView.Adapter<CommentsAdapter.CommentViewHolder> {
 
@@ -30,6 +32,7 @@ public class CommentsAdapter extends RecyclerView.Adapter<CommentsAdapter.Commen
     private final String currentUserId;
     private final DatabaseReference commentsRef;
     private final OnReplyClickListener replyListener;
+    private final Set<String> expandedComments = new HashSet<>();
 
     public interface OnReplyClickListener {
         void onReplyClick(FeedComment comment);
@@ -41,6 +44,11 @@ public class CommentsAdapter extends RecyclerView.Adapter<CommentsAdapter.Commen
         this.currentUserId = currentUserId;
         this.commentsRef = commentsRef;
         this.replyListener = replyListener;
+    }
+
+    public void expandComment(String commentId) {
+        expandedComments.add(commentId);
+        notifyDataSetChanged();
     }
 
     @NonNull
@@ -126,6 +134,28 @@ public class CommentsAdapter extends RecyclerView.Adapter<CommentsAdapter.Commen
         if (comment.replies != null && !comment.replies.isEmpty()) {
             List<FeedComment> replyList = new ArrayList<>(comment.replies.values());
             Collections.sort(replyList, (c1, c2) -> Long.compare(c1.timestamp, c2.timestamp));
+            
+            holder.tvViewAllReplies.setVisibility(View.VISIBLE);
+            
+            if (expandedComments.contains(comment.id)) {
+                holder.layoutReplies.setVisibility(View.VISIBLE);
+                holder.tvViewAllReplies.setText("Hide replies");
+            } else {
+                holder.layoutReplies.setVisibility(View.GONE);
+                holder.tvViewAllReplies.setText("View all replies (" + replyList.size() + ")");
+            }
+            
+            holder.tvViewAllReplies.setOnClickListener(v -> {
+                if (holder.layoutReplies.getVisibility() == View.VISIBLE) {
+                    holder.layoutReplies.setVisibility(View.GONE);
+                    holder.tvViewAllReplies.setText("View all replies (" + replyList.size() + ")");
+                    expandedComments.remove(comment.id);
+                } else {
+                    holder.layoutReplies.setVisibility(View.VISIBLE);
+                    holder.tvViewAllReplies.setText("Hide replies");
+                    expandedComments.add(comment.id);
+                }
+            });
             
             for (FeedComment reply : replyList) {
                 View replyView = LayoutInflater.from(context).inflate(R.layout.item_comment, holder.layoutReplies, false);
@@ -218,6 +248,9 @@ public class CommentsAdapter extends RecyclerView.Adapter<CommentsAdapter.Commen
 
                 holder.layoutReplies.addView(replyView);
             }
+        } else {
+            holder.tvViewAllReplies.setVisibility(View.GONE);
+            holder.layoutReplies.setVisibility(View.GONE);
         }
     }
 
@@ -294,7 +327,7 @@ public class CommentsAdapter extends RecyclerView.Adapter<CommentsAdapter.Commen
 
     static class CommentViewHolder extends RecyclerView.ViewHolder {
         ImageView ivCommentAvatar, ivCommentLike;
-        TextView tvCommentText, tvCommentTimestamp, tvReply, tvCommentDelete, tvCommentLikeCount;
+        TextView tvCommentText, tvCommentTimestamp, tvReply, tvCommentDelete, tvCommentLikeCount, tvViewAllReplies;
         LinearLayout layoutReplies;
 
         public CommentViewHolder(@NonNull View itemView) {
@@ -306,6 +339,7 @@ public class CommentsAdapter extends RecyclerView.Adapter<CommentsAdapter.Commen
             tvCommentDelete = itemView.findViewById(R.id.tvCommentDelete);
             ivCommentLike = itemView.findViewById(R.id.ivCommentLike);
             tvCommentLikeCount = itemView.findViewById(R.id.tvCommentLikeCount);
+            tvViewAllReplies = itemView.findViewById(R.id.tvViewAllReplies);
             layoutReplies = itemView.findViewById(R.id.layoutReplies);
         }
     }

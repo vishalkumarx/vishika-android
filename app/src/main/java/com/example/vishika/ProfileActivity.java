@@ -22,6 +22,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.CircleCrop;
+
 import com.yalantis.ucrop.UCrop;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
@@ -162,6 +163,18 @@ public class ProfileActivity extends AppCompatActivity {
         
         findViewById(R.id.btnEditVishal).setOnClickListener(v -> showEditDialog("vishal", "Vishal"));
         findViewById(R.id.btnEditRashika).setOnClickListener(v -> showEditDialog("rashika", "Rashika"));
+        
+        TextView tvAppVersion = findViewById(R.id.tvAppVersion);
+        if (tvAppVersion != null) {
+            String versionName = "";
+            try {
+                android.content.pm.PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+                versionName = pInfo.versionName;
+            } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+                e.printStackTrace();
+            }
+            tvAppVersion.setText("Vishika Version " + versionName);
+        }
     }
     
     private void updateProfileUI(DataSnapshot snapshot, TextView bio, TextView nick, TextView dob, TextView anniv, ImageView img) {

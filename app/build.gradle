@@ -15,8 +15,8 @@ android {
         applicationId "com.example.vishika"
         minSdk 24
         targetSdk 36
-        versionCode 13
-        versionName "2.3"
+        versionCode 35
+        versionName "4.4.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

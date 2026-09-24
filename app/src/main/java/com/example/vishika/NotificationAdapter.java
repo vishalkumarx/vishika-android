@@ -23,10 +23,12 @@ public class NotificationAdapter extends RecyclerView.Adapter<NotificationAdapte
 
     private final Context context;
     private final List<AppNotification> notifications;
+    private final String currentUserId;
 
-    public NotificationAdapter(Context context, List<AppNotification> notifications) {
+    public NotificationAdapter(Context context, List<AppNotification> notifications, String currentUserId) {
         this.context = context;
         this.notifications = notifications;
+        this.currentUserId = currentUserId;
     }
 
     @NonNull
@@ -82,6 +84,22 @@ public class NotificationAdapter extends RecyclerView.Adapter<NotificationAdapte
                 }
                 context.startActivity(intent);
             }
+        });
+
+        holder.itemView.setOnLongClickListener(v -> {
+            new android.app.AlertDialog.Builder(context)
+                .setTitle("Delete Notification")
+                .setMessage("Are you sure you want to delete this notification?")
+                .setPositiveButton("Delete", (dialog, which) -> {
+                    FirebaseDatabase.getInstance().getReference()
+                        .child("notifications")
+                        .child(currentUserId)
+                        .child(notification.id)
+                        .removeValue();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+            return true;
         });
     }
 

@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -49,6 +51,21 @@
             android:label="Draw" />
 
         <activity
+            android:name=".GalleryActivity"
+            android:exported="false"
+            android:label="Gallery" />
+
+        <activity
+            android:name=".MediaViewerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+
+        <activity
+            android:name=".StoryViewerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.StoryViewer" />
+
+        <activity
             android:name=".ChatActivity"
             android:exported="false"
             android:label="Chat" />
@@ -73,6 +90,11 @@
             android:exported="false"
             android:label="New Post"
             android:windowSoftInputMode="adjustResize" />
+            
+        <activity
+            android:name=".LocationHistoryActivity"
+            android:exported="false"
+            android:label="Location History" />
             
         <service
             android:name=".MoodService"
@@ -108,6 +130,17 @@
                 android:resource="@xml/locket_widget_info" />
         </receiver>
         
+        <!-- FileProvider for OTA Auto-Updater -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>

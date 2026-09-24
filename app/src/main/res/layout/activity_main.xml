@@ -95,6 +95,103 @@
             android:orientation="vertical"
             android:paddingHorizontal="24dp">
 
+            <!-- Stories Section -->
+            <LinearLayout
+                android:id="@+id/storyContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="8dp">
+
+                <!-- My Story -->
+                <LinearLayout
+                    android:id="@+id/btnMyStory"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:layout_marginEnd="16dp"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <FrameLayout
+                        android:layout_width="80dp"
+                        android:layout_height="80dp">
+
+                        <!-- Story Ring -->
+                        <View
+                            android:id="@+id/myStoryRing"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="@drawable/bg_story_ring_inactive" />
+
+                        <ImageView
+                            android:id="@+id/imgMyStoryProfile"
+                            android:layout_width="70dp"
+                            android:layout_height="70dp"
+                            android:layout_gravity="center" />
+
+                        <ImageView
+                            android:id="@+id/imgAddStory"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_gravity="bottom|end"
+                            android:src="@drawable/ic_add_story"
+                            android:background="@drawable/bg_add_story_circle"
+                            android:padding="4dp"
+                            android:elevation="2dp" />
+                    </FrameLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Your Story"
+                        android:textColor="#2D2036"
+                        android:textSize="12sp"
+                        android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <!-- Partner Story -->
+                <LinearLayout
+                    android:id="@+id/btnPartnerStory"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <FrameLayout
+                        android:layout_width="80dp"
+                        android:layout_height="80dp">
+
+                        <!-- Story Ring -->
+                        <View
+                            android:id="@+id/partnerStoryRing"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:background="@drawable/bg_story_ring_inactive" />
+
+                        <ImageView
+                            android:id="@+id/imgPartnerStoryProfile"
+                            android:layout_width="70dp"
+                            android:layout_height="70dp"
+                            android:layout_gravity="center" />
+                    </FrameLayout>
+
+                    <TextView
+                        android:id="@+id/txtPartnerStoryLabel"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Partner's Story"
+                        android:textColor="#2D2036"
+                        android:textSize="12sp"
+                        android:layout_marginTop="4dp" />
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- Distance Card -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -126,6 +223,22 @@
                         android:background="@drawable/bg_distance_overlay"
                         android:padding="8dp"
                         android:src="@drawable/ic_refresh"
+                        android:elevation="4dp"
+                        android:clickable="true"
+                        android:focusable="true" />
+                        
+                    <!-- History Button -->
+                    <ImageView
+                        android:id="@+id/btnLocationHistory"
+                        android:layout_width="40dp"
+                        android:layout_height="40dp"
+                        android:layout_gravity="top|end"
+                        android:layout_marginTop="12dp"
+                        android:layout_marginEnd="64dp"
+                        android:background="@drawable/bg_distance_overlay"
+                        android:padding="8dp"
+                        android:src="@android:drawable/ic_menu_recent_history"
+                        app:tint="#333333"
                         android:elevation="4dp"
                         android:clickable="true"
                         android:focusable="true" />
@@ -533,6 +646,40 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1" />
+                            
+                        <LinearLayout
+                            android:id="@+id/soundBtnExtract"
+                            android:layout_width="120dp"
+                            android:layout_height="120dp"
+                            android:layout_marginHorizontal="8dp"
+                            android:background="@drawable/bg_circle_button"
+                            android:backgroundTint="#FFE4E1"
+                            android:gravity="center"
+                            android:orientation="vertical"
+                            android:clickable="true"
+                            android:focusable="true">
+                            
+                            <ImageView
+                                android:layout_width="40dp"
+                                android:layout_height="40dp"
+                                android:src="@android:drawable/ic_menu_camera"
+                                app:tint="#FF4081" />
+                                
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:text="Extract\nAudio"
+                                android:textAlignment="center"
+                                android:textColor="#FF4081"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <Space
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1" />
                     </LinearLayout>
                 </HorizontalScrollView>
             </androidx.constraintlayout.widget.ConstraintLayout>
@@ -559,15 +706,6 @@
             </com.google.android.material.card.MaterialCardView>
 
 
-            <com.example.vishika.BoldTextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:fontFamily="@font/fredoka"
-                android:text="Walkie Talkie"
-                android:textColor="#2D2036"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-
             <!-- Walkie Talkie Card -->
             <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
@@ -577,41 +715,108 @@
                 android:background="@drawable/bg_card_pink"
                 android:padding="20dp">
 
-                <LinearLayout
+                <ImageView
                     android:id="@+id/btnPushToTalk"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_button_answer"
+                    android:layout_height="140dp"
+                    android:adjustViewBounds="true"
                     android:clickable="true"
                     android:focusable="true"
-                    android:gravity="center"
-                    android:paddingHorizontal="24dp"
-                    android:paddingVertical="12dp"
+                    android:src="@drawable/bg_walkie_btn"
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent"
                     app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent">
-                    
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:layout_marginEnd="12dp"
-                        android:src="@android:drawable/ic_btn_speak_now"
-                        app:tint="#2D2036" />
-                    
-                    <com.example.vishika.BoldTextView
-                        android:id="@+id/txtPushToTalk"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:fontFamily="@font/fredoka"
-                        android:text="Hold to Talk"
-                        android:textColor="#2D2036"
-                        android:textSize="18sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
+                    app:layout_constraintEnd_toEndOf="parent" />
 
             </androidx.constraintlayout.widget.ConstraintLayout>
 
+
+            <com.example.vishika.BoldTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/fredoka"
+                android:text="Surprise Box"
+                android:textColor="#2D2036"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <!-- Surprise Box Card -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_card_pink"
+                android:padding="20dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent">
+
+                    <LinearLayout
+                        android:id="@+id/btnSendSurprise"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        android:background="@drawable/bg_button_answer"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:paddingVertical="12dp">
+                        
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="8dp"
+                            android:text="🎁"
+                            android:textSize="20sp" />
+                        
+                        <com.example.vishika.BoldTextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/fredoka"
+                            android:text="Send"
+                            android:textColor="#2D2036"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/btnGallery"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_button_answer"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center"
+                        android:paddingVertical="12dp">
+                        
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_marginEnd="8dp"
+                            android:src="@android:drawable/ic_menu_gallery"
+                            app:tint="#2D2036" />
+                        
+                        <com.example.vishika.BoldTextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="@font/fredoka"
+                            android:text="Gallery"
+                            android:textColor="#2D2036"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
 
             <com.example.vishika.BoldTextView
                 android:layout_width="wrap_content"

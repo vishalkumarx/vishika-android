@@ -8,6 +8,9 @@ public class ChatMessage {
     public String replyToText;
     public String replyToSender;
     public String imageUrl;
+    public String videoUrl;
+    public boolean isLiked;
+    public long storyTimestamp;
 
     public ChatMessage() {
         // Default constructor required for calls to DataSnapshot.getValue(ChatMessage.class)

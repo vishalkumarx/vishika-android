@@ -34,11 +34,21 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
     public interface OnReplyClickListener {
         void onReplyClicked(String replyText);
     }
+    
+    public interface OnMessageLikeListener {
+        void onMessageDoubleTapped(ChatMessage message);
+    }
 
     public ChatAdapter(Context context, List<ChatMessage> messages, String currentUserId) {
         this.context = context;
         this.messages = messages;
         this.currentUserId = currentUserId;
+    }
+
+    private OnMessageLikeListener likeListener;
+
+    public void setOnMessageLikeListener(OnMessageLikeListener listener) {
+        this.likeListener = listener;
     }
 
     public void setHighlightedMessage(String messageId) {
@@ -114,20 +124,43 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
 
         boolean isHighlighted = message.id != null && message.id.equals(highlightedMessageId);
         
+        boolean isStoryLike = "❤️ Liked your story".equals(message.text);
+
         if (emojisOnly) {
             holder.tvOutgoingText.setTextSize(48f);
+            holder.tvOutgoingText.setTypeface(null, android.graphics.Typeface.NORMAL);
             holder.layoutOutgoingBubble.setBackground(null);
+            
             holder.tvIncomingText.setTextSize(48f);
+            holder.tvIncomingText.setTypeface(null, android.graphics.Typeface.NORMAL);
             holder.layoutIncomingBubble.setBackground(null);
+            
             holder.tvOutgoingText.setPadding(0, 0, 0, 0);
             holder.tvIncomingText.setPadding(0, 0, 0, 0);
+        } else if (isStoryLike) {
+            holder.tvOutgoingText.setTextSize(14f);
+            holder.tvOutgoingText.setTextColor(android.graphics.Color.parseColor("#FF5C81"));
+            holder.tvOutgoingText.setTypeface(null, android.graphics.Typeface.ITALIC);
+            holder.layoutOutgoingBubble.setBackground(null);
+            
+            holder.tvIncomingText.setTextSize(14f);
+            holder.tvIncomingText.setTextColor(android.graphics.Color.parseColor("#FF5C81"));
+            holder.tvIncomingText.setTypeface(null, android.graphics.Typeface.ITALIC);
+            holder.layoutIncomingBubble.setBackground(null);
+            
+            holder.tvOutgoingText.setPadding(0, 8, 0, 0);
+            holder.tvIncomingText.setPadding(0, 8, 0, 0);
         } else {
             holder.tvOutgoingText.setTextSize(16f);
+            holder.tvOutgoingText.setTextColor(android.graphics.Color.WHITE);
+            holder.tvOutgoingText.setTypeface(null, android.graphics.Typeface.NORMAL);
             holder.layoutOutgoingBubble.setBackgroundResource(R.drawable.bg_bottom_nav);
             holder.layoutOutgoingBubble.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
                 android.graphics.Color.parseColor(isHighlighted ? "#FF8DA5" : "#FF5C81")));
             
             holder.tvIncomingText.setTextSize(16f);
+            holder.tvIncomingText.setTextColor(android.graphics.Color.BLACK);
+            holder.tvIncomingText.setTypeface(null, android.graphics.Typeface.NORMAL);
             holder.layoutIncomingBubble.setBackgroundResource(R.drawable.bg_bottom_nav);
             holder.layoutIncomingBubble.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
                 android.graphics.Color.parseColor(isHighlighted ? "#D0D0D0" : "#F0F0F0")));
@@ -172,16 +205,50 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
                 holder.layoutOutgoingBubble.setVisibility(View.GONE);
             }
             
-            if (message.imageUrl != null && !message.imageUrl.isEmpty()) {
-                holder.ivOutgoingImage.setVisibility(View.VISIBLE);
-                com.bumptech.glide.Glide.with(context)
-                        .load(message.imageUrl)
-                        .into(holder.ivOutgoingImage);
-                holder.ivOutgoingImage.setOnClickListener(v -> showFullScreenImage(message.imageUrl));
+            if ((message.imageUrl != null && !message.imageUrl.isEmpty()) || (message.videoUrl != null && !message.videoUrl.isEmpty())) {
+                boolean isExpired = false;
+                long twentyFourHours = 24 * 60 * 60 * 1000L;
+                long now = System.currentTimeMillis();
+                
+                if (message.storyTimestamp > 0) {
+                    if (now - message.storyTimestamp > twentyFourHours) {
+                        isExpired = true;
+                    }
+                } else if (now - message.timestamp > twentyFourHours) {
+                    isExpired = true;
+                }
+
+                if (isExpired) {
+                    holder.layoutOutgoingMedia.setVisibility(View.GONE);
+                    holder.ivOutgoingImage.setOnClickListener(null);
+                    holder.tvOutgoingExpired.setVisibility(View.VISIBLE);
+                } else {
+                    holder.tvOutgoingExpired.setVisibility(View.GONE);
+                    holder.layoutOutgoingMedia.setVisibility(View.VISIBLE);
+                    
+                    String mediaUrl = message.videoUrl != null ? message.videoUrl : message.imageUrl;
+                    boolean isVideo = message.videoUrl != null && !message.videoUrl.isEmpty();
+                    
+                    holder.ivOutgoingPlayIcon.setVisibility(isVideo ? View.VISIBLE : View.GONE);
+
+                    com.bumptech.glide.Glide.with(context)
+                            .load(mediaUrl)
+                            .into(holder.ivOutgoingImage);
+                    setDoubleTapListener(holder.ivOutgoingImage, message, () -> showFullScreenMedia(mediaUrl, isVideo));
+                }
             } else {
-                holder.ivOutgoingImage.setVisibility(View.GONE);
+                holder.tvOutgoingExpired.setVisibility(View.GONE);
+                holder.layoutOutgoingMedia.setVisibility(View.GONE);
                 holder.ivOutgoingImage.setOnClickListener(null);
             }
+            if (message.isLiked) {
+                holder.ivOutgoingLike.setVisibility(View.VISIBLE);
+            } else {
+                holder.ivOutgoingLike.setVisibility(View.GONE);
+            }
+            
+            setDoubleTapListener(holder.layoutOutgoingBubble, message, null);
+
             holder.tvOutgoingTime.setText(timeStr);
             
             if (position == messages.size() - 1 && message.timestamp <= partnerLastSeen) {
@@ -231,31 +298,106 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
                 holder.layoutIncomingBubble.setVisibility(View.GONE);
             }
             
-            if (message.imageUrl != null && !message.imageUrl.isEmpty()) {
-                holder.ivIncomingImage.setVisibility(View.VISIBLE);
-                com.bumptech.glide.Glide.with(context)
-                        .load(message.imageUrl)
-                        .into(holder.ivIncomingImage);
-                holder.ivIncomingImage.setOnClickListener(v -> showFullScreenImage(message.imageUrl));
+            if ((message.imageUrl != null && !message.imageUrl.isEmpty()) || (message.videoUrl != null && !message.videoUrl.isEmpty())) {
+                boolean isExpired = false;
+                long twentyFourHours = 24 * 60 * 60 * 1000L;
+                long now = System.currentTimeMillis();
+                
+                if (message.storyTimestamp > 0) {
+                    if (now - message.storyTimestamp > twentyFourHours) {
+                        isExpired = true;
+                    }
+                } else if (now - message.timestamp > twentyFourHours) {
+                    isExpired = true;
+                }
+
+                if (isExpired) {
+                    holder.layoutIncomingMedia.setVisibility(View.GONE);
+                    holder.ivIncomingImage.setOnClickListener(null);
+                    holder.tvIncomingExpired.setVisibility(View.VISIBLE);
+                } else {
+                    holder.tvIncomingExpired.setVisibility(View.GONE);
+                    holder.layoutIncomingMedia.setVisibility(View.VISIBLE);
+                    
+                    String mediaUrl = message.videoUrl != null ? message.videoUrl : message.imageUrl;
+                    boolean isVideo = message.videoUrl != null && !message.videoUrl.isEmpty();
+                    
+                    holder.ivIncomingPlayIcon.setVisibility(isVideo ? View.VISIBLE : View.GONE);
+
+                    com.bumptech.glide.Glide.with(context)
+                            .load(mediaUrl)
+                            .into(holder.ivIncomingImage);
+                    setDoubleTapListener(holder.ivIncomingImage, message, () -> showFullScreenMedia(mediaUrl, isVideo));
+                }
             } else {
-                holder.ivIncomingImage.setVisibility(View.GONE);
+                holder.tvIncomingExpired.setVisibility(View.GONE);
+                holder.layoutIncomingMedia.setVisibility(View.GONE);
                 holder.ivIncomingImage.setOnClickListener(null);
             }
+            if (message.isLiked) {
+                holder.ivIncomingLike.setVisibility(View.VISIBLE);
+            } else {
+                holder.ivIncomingLike.setVisibility(View.GONE);
+            }
+            
+            setDoubleTapListener(holder.layoutIncomingBubble, message, null);
+
             holder.tvIncomingTime.setText(timeStr);
         }
     }
     
     private void showFullScreenImage(String imageUrl) {
-        android.app.Dialog dialog = new android.app.Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
-        android.widget.ImageView imageView = new android.widget.ImageView(context);
-        imageView.setLayoutParams(new android.view.ViewGroup.LayoutParams(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT, 
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT));
-        imageView.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-        com.bumptech.glide.Glide.with(context).load(imageUrl).into(imageView);
-        imageView.setOnClickListener(v -> dialog.dismiss());
-        dialog.setContentView(imageView);
-        dialog.show();
+        showFullScreenMedia(imageUrl, false);
+    }
+    
+    private void showFullScreenMedia(String mediaUrl, boolean isVideo) {
+        if (isVideo) {
+            android.content.Intent intent = new android.content.Intent(context, MediaViewerActivity.class);
+            intent.putExtra("MEDIA_URL", mediaUrl);
+            intent.putExtra("MEDIA_TYPE", "Video");
+            context.startActivity(intent);
+        } else {
+            android.app.Dialog dialog = new android.app.Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+            android.widget.ImageView imageView = new android.widget.ImageView(context);
+            imageView.setLayoutParams(new android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT, 
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT));
+            imageView.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            com.bumptech.glide.Glide.with(context).load(mediaUrl).into(imageView);
+            imageView.setOnClickListener(v -> dialog.dismiss());
+            dialog.setContentView(imageView);
+            dialog.show();
+        }
+    }
+    
+    private void setDoubleTapListener(View view, ChatMessage message, Runnable onSingleTap) {
+        view.setOnClickListener(new View.OnClickListener() {
+            private long lastClickTime = 0;
+            private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
+            private Runnable singleTapRunnable;
+
+            @Override
+            public void onClick(View v) {
+                long clickTime = System.currentTimeMillis();
+                if (clickTime - lastClickTime < 300) {
+                    // Double tap
+                    if (singleTapRunnable != null) {
+                        handler.removeCallbacks(singleTapRunnable);
+                        singleTapRunnable = null;
+                    }
+                    if (likeListener != null) {
+                        likeListener.onMessageDoubleTapped(message);
+                    }
+                } else {
+                    // Single tap
+                    if (onSingleTap != null) {
+                        singleTapRunnable = onSingleTap;
+                        handler.postDelayed(singleTapRunnable, 300);
+                    }
+                }
+                lastClickTime = clickTime;
+            }
+        });
     }
 
     @Override
@@ -311,23 +453,32 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
 
     public static class ViewHolder extends RecyclerView.ViewHolder {
         public LinearLayout layoutOutgoing;
-        public LinearLayout layoutOutgoingBubble;
+        public androidx.constraintlayout.widget.ConstraintLayout layoutOutgoingBubble;
         public TextView tvOutgoingText;
         public TextView tvOutgoingTime;
+        public ImageView ivOutgoingLike;
         public TextView tvSeenStatus;
         public LinearLayout layoutReplyOutgoing;
         public TextView tvReplySenderOutgoing;
         public TextView tvReplyTextOutgoing;
         public ImageView ivOutgoingImage;
+        public TextView tvOutgoingExpired;
 
+        public android.widget.FrameLayout layoutOutgoingMedia;
+        public ImageView ivOutgoingPlayIcon;
+        
         public LinearLayout layoutIncoming;
-        public LinearLayout layoutIncomingBubble;
+        public androidx.constraintlayout.widget.ConstraintLayout layoutIncomingBubble;
         public TextView tvIncomingText;
         public TextView tvIncomingTime;
+        public ImageView ivIncomingLike;
         public LinearLayout layoutReplyIncoming;
         public TextView tvReplySenderIncoming;
         public TextView tvReplyTextIncoming;
         public ImageView ivIncomingImage;
+        public TextView tvIncomingExpired;
+        public android.widget.FrameLayout layoutIncomingMedia;
+        public ImageView ivIncomingPlayIcon;
 
         public TextView tvDateBanner;
 
@@ -337,20 +488,28 @@ public class ChatAdapter extends RecyclerView.Adapter<ChatAdapter.ViewHolder> {
             layoutOutgoingBubble = itemView.findViewById(R.id.layoutOutgoingBubble);
             tvOutgoingText = itemView.findViewById(R.id.tvOutgoingText);
             tvOutgoingTime = itemView.findViewById(R.id.tvOutgoingTime);
+            ivOutgoingLike = itemView.findViewById(R.id.ivOutgoingLike);
             tvSeenStatus = itemView.findViewById(R.id.tvSeenStatus);
             layoutReplyOutgoing = itemView.findViewById(R.id.layoutReplyOutgoing);
             tvReplySenderOutgoing = itemView.findViewById(R.id.tvReplySenderOutgoing);
             tvReplyTextOutgoing = itemView.findViewById(R.id.tvReplyTextOutgoing);
             ivOutgoingImage = itemView.findViewById(R.id.ivOutgoingImage);
+            tvOutgoingExpired = itemView.findViewById(R.id.tvOutgoingExpired);
+            layoutOutgoingMedia = itemView.findViewById(R.id.layoutOutgoingMedia);
+            ivOutgoingPlayIcon = itemView.findViewById(R.id.ivOutgoingPlayIcon);
 
             layoutIncoming = itemView.findViewById(R.id.layoutIncoming);
             layoutIncomingBubble = itemView.findViewById(R.id.layoutIncomingBubble);
             tvIncomingText = itemView.findViewById(R.id.tvIncomingText);
             tvIncomingTime = itemView.findViewById(R.id.tvIncomingTime);
+            ivIncomingLike = itemView.findViewById(R.id.ivIncomingLike);
             layoutReplyIncoming = itemView.findViewById(R.id.layoutReplyIncoming);
             tvReplySenderIncoming = itemView.findViewById(R.id.tvReplySenderIncoming);
             tvReplyTextIncoming = itemView.findViewById(R.id.tvReplyTextIncoming);
             ivIncomingImage = itemView.findViewById(R.id.ivIncomingImage);
+            tvIncomingExpired = itemView.findViewById(R.id.tvIncomingExpired);
+            layoutIncomingMedia = itemView.findViewById(R.id.layoutIncomingMedia);
+            ivIncomingPlayIcon = itemView.findViewById(R.id.ivIncomingPlayIcon);
 
             tvDateBanner = itemView.findViewById(R.id.tvDateBanner);
         }

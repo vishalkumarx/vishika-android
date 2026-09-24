@@ -37,14 +37,19 @@ public class ChatActivity extends AppCompatActivity {
 
     private EditText etMessage;
 
-    private androidx.activity.result.ActivityResultLauncher<android.content.Intent> imagePickerLauncher = registerForActivityResult(
+    private androidx.activity.result.ActivityResultLauncher<android.content.Intent> mediaPickerLauncher = registerForActivityResult(
             new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
             result -> {
                 if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                    android.net.Uri selectedImageUri = result.getData().getData();
-                    if (selectedImageUri != null) {
+                    android.net.Uri selectedMediaUri = result.getData().getData();
+                    if (selectedMediaUri != null) {
                         String caption = etMessage != null ? etMessage.getText().toString().trim() : "";
-                        uploadImageToSupabase(selectedImageUri, caption);
+                        String mimeType = getContentResolver().getType(selectedMediaUri);
+                        if (mimeType != null && mimeType.startsWith("video/")) {
+                            uploadVideoToSupabase(selectedMediaUri, caption);
+                        } else {
+                            uploadImageToSupabase(selectedMediaUri, caption);
+                        }
                     }
                 }
             });
@@ -93,8 +98,9 @@ public class ChatActivity extends AppCompatActivity {
         
         btnAttach.setOnClickListener(v -> {
             android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
-            intent.setType("image/*");
-            imagePickerLauncher.launch(android.content.Intent.createChooser(intent, "Select Image for Chat"));
+            intent.setType("*/*");
+            intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
+            mediaPickerLauncher.launch(android.content.Intent.createChooser(intent, "Select Media for Chat"));
         });
 
         recyclerView = findViewById(R.id.recyclerViewChat);
@@ -139,7 +145,15 @@ public class ChatActivity extends AppCompatActivity {
             replyingToMessage = message;
             layoutReplyPreview.setVisibility(View.VISIBLE);
             tvReplyPreviewSender.setText(message.senderId.equals(currentUserId) ? "You" : tvPartnerName.getText().toString());
-            tvReplyPreviewText.setText(message.text);
+            String previewText = message.text;
+            if (previewText == null || previewText.trim().isEmpty()) {
+                if (message.videoUrl != null && !message.videoUrl.isEmpty()) {
+                    previewText = "🎥 Video";
+                } else if (message.imageUrl != null && !message.imageUrl.isEmpty()) {
+                    previewText = "📷 Image/Sticker";
+                }
+            }
+            tvReplyPreviewText.setText(previewText);
             etMessage.requestFocus();
             
             // Show keyboard
@@ -151,10 +165,19 @@ public class ChatActivity extends AppCompatActivity {
         
         adapter.setOnReplyClickListener(replyText -> {
             for (int i = messages.size() - 1; i >= 0; i--) {
-                if (replyText.equals(messages.get(i).text)) {
+                ChatMessage m = messages.get(i);
+                String matchText = m.text;
+                if (matchText == null || matchText.trim().isEmpty()) {
+                    if (m.videoUrl != null && !m.videoUrl.isEmpty()) {
+                        matchText = "🎥 Video";
+                    } else if (m.imageUrl != null && !m.imageUrl.isEmpty()) {
+                        matchText = "📷 Image/Sticker";
+                    }
+                }
+                if (replyText != null && replyText.equals(matchText)) {
                     recyclerView.smoothScrollToPosition(i);
                     // Add a small delay so it highlights after the scroll starts
-                    final String msgId = messages.get(i).id;
+                    final String msgId = m.id;
                     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
                         adapter.setHighlightedMessage(msgId);
                     }, 300);
@@ -195,10 +218,9 @@ public class ChatActivity extends AppCompatActivity {
             public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override
             public void afterTextChanged(android.text.Editable s) {
-                FirebaseDatabase.getInstance().getReference()
-                    .child("typing")
-                    .child(currentUserId)
-                    .setValue(s.length() > 0);
+                DatabaseReference typingRef = FirebaseDatabase.getInstance().getReference().child("typing").child(currentUserId);
+                typingRef.setValue(s.length() > 0);
+                typingRef.onDisconnect().setValue(false);
             }
         });
 
@@ -425,22 +447,34 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void sendMessage(String text) {
-        sendImageMessage(text, null);
+        sendMediaMessage(text, null, false);
     }
     
-    private void sendImageMessage(String text, String imageUrl) {
+    private void sendMediaMessage(String text, String mediaUrl, boolean isVideo) {
         String messageId = chatsRef.push().getKey();
         if (messageId != null) {
             ChatMessage msg;
             if (replyingToMessage != null) {
                 String replySender = replyingToMessage.senderId.equals(currentUserId) ? "You" : (MainActivity.IS_VISHAL ? "Rashika" : "Vishal");
-                msg = new ChatMessage(messageId, currentUserId, text, System.currentTimeMillis(), replyingToMessage.text, replySender);
+                String replyText = replyingToMessage.text;
+                if (replyText == null || replyText.trim().isEmpty()) {
+                    if (replyingToMessage.videoUrl != null && !replyingToMessage.videoUrl.isEmpty()) {
+                        replyText = "🎥 Video";
+                    } else if (replyingToMessage.imageUrl != null && !replyingToMessage.imageUrl.isEmpty()) {
+                        replyText = "📷 Image/Sticker";
+                    }
+                }
+                msg = new ChatMessage(messageId, currentUserId, text, System.currentTimeMillis(), replyText, replySender);
                 cancelReply();
             } else {
                 msg = new ChatMessage(messageId, currentUserId, text, System.currentTimeMillis());
             }
-            if (imageUrl != null) {
-                msg.imageUrl = imageUrl;
+            if (mediaUrl != null) {
+                if (isVideo) {
+                    msg.videoUrl = mediaUrl;
+                } else {
+                    msg.imageUrl = mediaUrl;
+                }
             }
             chatsRef.child(messageId).setValue(msg);
             
@@ -455,42 +489,127 @@ public class ChatActivity extends AppCompatActivity {
         
         new Thread(() -> {
             try {
+                String mimeType = getContentResolver().getType(imageUri);
+                boolean isGif = "image/gif".equals(mimeType);
+                
+                byte[] bytes;
+                String extension;
+                String contentType;
+                
                 java.io.InputStream inputStream = getContentResolver().openInputStream(imageUri);
-                android.graphics.Bitmap originalBitmap = android.graphics.BitmapFactory.decodeStream(inputStream);
-                if (inputStream != null) inputStream.close();
                 
-                int maxDim = 1024;
-                float scale = Math.min((float)maxDim/originalBitmap.getWidth(), (float)maxDim/originalBitmap.getHeight());
-                android.graphics.Bitmap scaledBitmap;
-                if (scale < 1.0f) {
-                    scaledBitmap = android.graphics.Bitmap.createScaledBitmap(originalBitmap, (int)(originalBitmap.getWidth()*scale), (int)(originalBitmap.getHeight()*scale), true);
+                if (isGif) {
+                    java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                    int nRead;
+                    byte[] data = new byte[16384];
+                    while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+                        buffer.write(data, 0, nRead);
+                    }
+                    bytes = buffer.toByteArray();
+                    extension = ".gif";
+                    contentType = "image/gif";
                 } else {
-                    scaledBitmap = originalBitmap;
+                    android.graphics.Bitmap originalBitmap = android.graphics.BitmapFactory.decodeStream(inputStream);
+                    int maxDim = 1024;
+                    float scale = Math.min((float)maxDim/originalBitmap.getWidth(), (float)maxDim/originalBitmap.getHeight());
+                    android.graphics.Bitmap scaledBitmap;
+                    if (scale < 1.0f) {
+                        scaledBitmap = android.graphics.Bitmap.createScaledBitmap(originalBitmap, (int)(originalBitmap.getWidth()*scale), (int)(originalBitmap.getHeight()*scale), true);
+                    } else {
+                        scaledBitmap = originalBitmap;
+                    }
+                    
+                    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                    scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, baos);
+                    bytes = baos.toByteArray();
+                    extension = ".jpg";
+                    contentType = "image/jpeg";
                 }
-                
-                java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-                scaledBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, baos);
-                byte[] bytes = baos.toByteArray();
+                if (inputStream != null) inputStream.close();
 
-                String filename = "chat_" + System.currentTimeMillis() + ".jpg";
+                String filename = "chat_" + System.currentTimeMillis() + extension;
                 String uploadUrl = SUPABASE_URL + "/storage/v1/object/profile_images/" + filename;
 
                 okhttp3.OkHttpClient client = new okhttp3.OkHttpClient();
-                okhttp3.RequestBody requestBody = okhttp3.RequestBody.create(okhttp3.MediaType.parse("image/jpeg"), bytes);
+                okhttp3.RequestBody requestBody = okhttp3.RequestBody.create(okhttp3.MediaType.parse(contentType), bytes);
 
                 okhttp3.Request request = new okhttp3.Request.Builder()
                         .url(uploadUrl)
                         .post(requestBody)
                         .addHeader("Authorization", "Bearer " + SUPABASE_KEY)
                         .addHeader("apikey", SUPABASE_KEY)
-                        .addHeader("Content-Type", "image/jpeg")
+                        .addHeader("Content-Type", contentType)
                         .build();
 
                 okhttp3.Response response = client.newCall(request).execute();
                 if (response.isSuccessful()) {
                     String publicUrl = SUPABASE_URL + "/storage/v1/object/public/profile_images/" + filename;
                     runOnUiThread(() -> {
-                        sendImageMessage(caption, publicUrl);
+                        sendMediaMessage(caption, publicUrl, false);
+                        pbUpload.setVisibility(View.GONE);
+                        btnSend.setEnabled(true);
+                        btnAttach.setEnabled(true);
+                        etMessage.setText("");
+                    });
+                } else {
+                    runOnUiThread(() -> {
+                        Toast.makeText(ChatActivity.this, "Upload failed: " + response.code(), Toast.LENGTH_SHORT).show();
+                        pbUpload.setVisibility(View.GONE);
+                        btnSend.setEnabled(true);
+                        btnAttach.setEnabled(true);
+                    });
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                runOnUiThread(() -> {
+                    Toast.makeText(ChatActivity.this, "Upload error", Toast.LENGTH_SHORT).show();
+                    pbUpload.setVisibility(View.GONE);
+                    btnSend.setEnabled(true);
+                    btnAttach.setEnabled(true);
+                });
+            }
+        }).start();
+    }
+
+    private void uploadVideoToSupabase(android.net.Uri videoUri, String caption) {
+        pbUpload.setVisibility(View.VISIBLE);
+        btnSend.setEnabled(false);
+        btnAttach.setEnabled(false);
+        
+        new Thread(() -> {
+            try {
+                String contentType = "video/mp4";
+                String extension = ".mp4";
+                
+                java.io.InputStream inputStream = getContentResolver().openInputStream(videoUri);
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                int nRead;
+                byte[] data = new byte[16384];
+                while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+                    buffer.write(data, 0, nRead);
+                }
+                byte[] bytes = buffer.toByteArray();
+                if (inputStream != null) inputStream.close();
+
+                String filename = "chat_video_" + System.currentTimeMillis() + extension;
+                String uploadUrl = SUPABASE_URL + "/storage/v1/object/profile_images/" + filename;
+
+                okhttp3.OkHttpClient client = new okhttp3.OkHttpClient();
+                okhttp3.RequestBody requestBody = okhttp3.RequestBody.create(okhttp3.MediaType.parse(contentType), bytes);
+
+                okhttp3.Request request = new okhttp3.Request.Builder()
+                        .url(uploadUrl)
+                        .post(requestBody)
+                        .addHeader("Authorization", "Bearer " + SUPABASE_KEY)
+                        .addHeader("apikey", SUPABASE_KEY)
+                        .addHeader("Content-Type", contentType)
+                        .build();
+
+                okhttp3.Response response = client.newCall(request).execute();
+                if (response.isSuccessful()) {
+                    String publicUrl = SUPABASE_URL + "/storage/v1/object/public/profile_images/" + filename;
+                    runOnUiThread(() -> {
+                        sendMediaMessage(caption, publicUrl, true);
                         pbUpload.setVisibility(View.GONE);
                         btnSend.setEnabled(true);
                         btnAttach.setEnabled(true);
@@ -527,6 +646,10 @@ public class ChatActivity extends AppCompatActivity {
         }
         
         FirebaseDatabase.getInstance().getReference().child("chat_seen").child(currentUserId).setValue(System.currentTimeMillis());
+        
+        if (currentUserId != null && etMessage != null && etMessage.getText().length() > 0) {
+            FirebaseDatabase.getInstance().getReference().child("typing").child(currentUserId).setValue(true);
+        }
     }
 
     @Override

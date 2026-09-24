@@ -82,10 +82,27 @@ public class DrawingView extends View {
     private float lastRotationAngle = 0;
     private boolean isResizing = false;
     
+    private android.media.MediaPlayer chalkPlayer;
+    private android.os.Handler soundHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable stopSoundRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (chalkPlayer != null && chalkPlayer.isPlaying()) {
+                chalkPlayer.pause();
+                chalkPlayer.seekTo(0); // Optional: Reset to start so the next stroke sounds fresh
+            }
+        }
+    };
+    
     public DrawingView(Context context, AttributeSet attrs) {
         super(context, attrs);
         setWillNotDraw(false);
         setupScaleDetector(context);
+        
+        chalkPlayer = android.media.MediaPlayer.create(context, R.raw.chalk);
+        if (chalkPlayer != null) {
+            chalkPlayer.setVolume(1.0f, 1.0f);
+        }
     }
     
     private void setupScaleDetector(Context context) {
@@ -108,6 +125,10 @@ public class DrawingView extends View {
 
     public void setCurrentColor(int color) {
         this.currentColor = color;
+    }
+
+    public int getCurrentColor() {
+        return this.currentColor;
     }
 
     public void setCurrentWidth(float width) {
@@ -245,6 +266,13 @@ public class DrawingView extends View {
                                     stroke.path.lineTo(localX, localY);
                                 }
                                 invalidate();
+                                
+                                // Play chalk sound
+                                if (chalkPlayer != null && !chalkPlayer.isPlaying()) {
+                                    chalkPlayer.start();
+                                }
+                                soundHandler.removeCallbacks(stopSoundRunnable);
+                                soundHandler.postDelayed(stopSoundRunnable, 300); // stop if no points received for 300ms
                             }
                         }
                         @Override
@@ -337,6 +365,8 @@ public class DrawingView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        int layerId = canvas.saveLayer(0, 0, getWidth(), getHeight(), null);
+        
         drawObjects(canvas, myStrokes);
         drawObjects(canvas, partnerStrokes);
         
@@ -399,6 +429,8 @@ public class DrawingView extends View {
             
             canvas.restore();
         }
+        
+        canvas.restoreToCount(layerId);
     }
 
     private void drawObjects(Canvas canvas, List<DrawObject> objects) {
@@ -473,6 +505,47 @@ public class DrawingView extends View {
                 
                 canvas.restore();
             } else {
+                if ("eraser".equals(s.type)) {
+                    s.paint.setXfermode(new android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR));
+                    s.paint.setShader(null);
+                    s.paint.setPathEffect(null);
+                } else if ("heart".equals(s.type)) {
+                    s.paint.setXfermode(null);
+                    s.paint.setShader(null);
+                    if (s.paint.getPathEffect() == null) {
+                        Path stamp = new Path();
+                        float width = Math.max(20f, s.paint.getStrokeWidth() * 2f);
+                        float height = width;
+                        
+                        stamp.moveTo(width / 2, height / 5);
+                        stamp.cubicTo(5 * width / 14, 0, 0, height / 15, width / 28, 2 * height / 5);
+                        stamp.cubicTo(width / 14, 2 * height / 3, 3 * width / 7, 5 * height / 6, width / 2, height);
+                        stamp.cubicTo(4 * width / 7, 5 * height / 6, 13 * width / 14, 2 * height / 3, 27 * width / 28, 2 * height / 5);
+                        stamp.cubicTo(width, height / 15, 9 * width / 14, 0, width / 2, height / 5);
+                        stamp.close();
+                        
+                        android.graphics.Matrix m = new android.graphics.Matrix();
+                        m.postTranslate(-width / 2, -height / 2);
+                        stamp.transform(m);
+                        
+                        s.paint.setStyle(Paint.Style.FILL_AND_STROKE);
+                        s.paint.setPathEffect(new android.graphics.PathDashPathEffect(stamp, width * 1.5f, 0, android.graphics.PathDashPathEffect.Style.ROTATE));
+                    }
+                } else if (s.currentColor == Color.parseColor("#000001")) {
+                    s.paint.setXfermode(null);
+                    s.paint.setPathEffect(null);
+                    if (s.paint.getShader() == null) {
+                        android.graphics.Shader shader = new android.graphics.LinearGradient(
+                                0, 0, 400, 400,
+                                new int[]{Color.RED, Color.YELLOW, Color.GREEN, Color.CYAN, Color.BLUE, Color.MAGENTA, Color.RED},
+                                null, android.graphics.Shader.TileMode.MIRROR);
+                        s.paint.setShader(shader);
+                    }
+                } else {
+                    s.paint.setXfermode(null);
+                    s.paint.setShader(null);
+                    s.paint.setPathEffect(null);
+                }
                 canvas.drawPath(s.path, s.paint);
             }
         }
@@ -484,7 +557,7 @@ public class DrawingView extends View {
             getParent().requestDisallowInterceptTouchEvent(true);
         }
         
-        if (!"path".equals(currentTool)) {
+        if (!"path".equals(currentTool) && !"eraser".equals(currentTool) && !"heart".equals(currentTool)) {
             // Let the activity handle text/sticker placement via click listener
             return false;
         }
@@ -497,6 +570,7 @@ public class DrawingView extends View {
             case MotionEvent.ACTION_DOWN:
                 currentStrokeKey = myStrokesRef != null ? myStrokesRef.push().getKey() : null;
                 currentLocalStroke = new DrawObject(currentColor, currentWidth, currentStrokeKey);
+                currentLocalStroke.type = currentTool;
                 currentLocalStroke.path.moveTo(x, y);
                 myStrokes.add(currentLocalStroke);
                 
@@ -524,6 +598,9 @@ public class DrawingView extends View {
                 if (currentLocalStroke != null) {
                     currentLocalStroke.path.lineTo(x, y);
                     pushPointToFirebase(x, y);
+                    if (isSetup && myStrokesRef != null && myStrokesRef.getParent() != null) {
+                        myStrokesRef.getParent().child("last_updated").setValue(System.currentTimeMillis());
+                    }
                     invalidate();
                     currentLocalStroke = null;
                 }

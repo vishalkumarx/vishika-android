@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vishika App Updater</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        .container {
+            background-color: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 400px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .drop-zone {
+            border: 2px dashed #aaa;
+            padding: 30px;
+            width: 100%;
+            text-align: center;
+            border-radius: 8px;
+            box-sizing: border-box;
+            background-color: #fafafa;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .drop-zone.dragover {
+            border-color: #4CAF50;
+            background-color: #e8f5e9;
+        }
+        .drop-zone input[type="file"] {
+            display: none;
+        }
+        .drop-zone p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            text-align: center;
+            font-weight: bold;
+            color: #333;
+            white-space: pre-line;
+        }
+        .error {
+            color: #e74c3c;
+        }
+        .success {
+            color: #2ecc71;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🚀 Vishika App Updater</h2>
+    
+    <div class="form-group">
+        <label for="targetAudience">Target Audience</label>
+        <select id="targetAudience">
+            <option value="vishal">Vishal Only</option>
+            <option value="rashika">Rashika Only</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="versionCode">Version Code (Number)</label>
+        <input type="number" id="versionCode" placeholder="e.g. 2" required>
+    </div>
+
+    <div class="form-group">
+        <label>APK File</label>
+        <div id="dropZone" class="drop-zone" onclick="document.getElementById('apkFile').click()">
+            <p id="dropZoneText">Drag & Drop your .apk file here<br>or click to browse</p>
+            <input type="file" id="apkFile" accept=".apk" required>
+        </div>
+    </div>
+
+    <button id="uploadBtn" onclick="uploadUpdate()">Upload Update</button>
+
+    <div id="status"></div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+    // Firebase Configuration
+    const firebaseConfig = {
+        apiKey: "AIzaSyCSdPkvE7_WvvPhVApEM0aM3W70lD5CRMg",
+        projectId: "vishika",
+        storageBucket: "vishika.firebasestorage.app",
+        appId: "1:997995098258:android:6f7635cbab0e350429364b",
+        databaseURL: "https://vishika-default-rtdb.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // Supabase Configuration
+    const SUPABASE_URL = "https://rftikfmjugzckousuyda.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmdGlrZm1qdWd6Y2tvdXN1eWRhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODI1NDcxMCwiZXhwIjoyMTAzODMwNzEwfQ.GDw92AkGmdWfxRhEsA3YAJLlElf2rZOx2_SY8fPQoQw";
+
+    window.uploadUpdate = async function() {
+        const targetAudience = document.getElementById('targetAudience').value;
+        const versionCodeInput = document.getElementById('versionCode').value;
+        const apkFile = document.getElementById('apkFile').files[0];
+        const statusDiv = document.getElementById('status');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        if (!apkFile) {
+            statusDiv.innerHTML = '<span class="error">Please select an APK.</span>';
+            return;
+        }
+        
+        if (!versionCodeInput) {
+            statusDiv.innerHTML = '<span class="error">Please enter a Version Code.</span>';
+            return;
+        }
+        const versionCode = parseInt(versionCodeInput);
+
+        uploadBtn.disabled = true;
+        statusDiv.innerHTML = 'Preparing upload...<br><progress id="uploadProgress" value="0" max="100" style="width:100%; margin-top:10px;"></progress>';
+        const progressBar = document.getElementById('uploadProgress');
+
+        try {
+            const timestamp = Date.now();
+            // 1. Upload to Supabase Storage
+            const filename = `vishika_update_latest.apk`;
+            const uploadUrl = `${SUPABASE_URL}/storage/v1/object/profile_images/${filename}`;
+
+            await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', uploadUrl, true);
+                xhr.setRequestHeader('Authorization', `Bearer ${SUPABASE_KEY}`);
+                xhr.setRequestHeader('apikey', SUPABASE_KEY);
+                xhr.setRequestHeader('Content-Type', 'application/vnd.android.package-archive');
+                xhr.setRequestHeader('x-upsert', 'true');
+
+                xhr.upload.onprogress = function(e) {
+                    if (e.lengthComputable) {
+                        const percentComplete = (e.loaded / e.total) * 100;
+                        progressBar.value = percentComplete;
+                        if (percentComplete === 100) {
+                            statusDiv.innerHTML = 'Processing on server...<br><progress value="100" max="100" style="width:100%; margin-top:10px;"></progress>';
+                        }
+                    }
+                };
+
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        resolve(xhr.responseText);
+                    } else {
+                        reject(new Error(`Supabase upload failed: ${xhr.responseText}`));
+                    }
+                };
+
+                xhr.onerror = function() {
+                    reject(new Error("Network error occurred during upload."));
+                };
+
+                xhr.send(apkFile);
+            });
+
+            statusDiv.innerHTML = 'Upload successful! Updating Firebase...';
+
+            // 2. Generate Public URL
+            const publicDownloadUrl = `${SUPABASE_URL}/storage/v1/object/public/profile_images/${filename}`;
+
+            // 3. Update Firebase
+            const updatePayload = {
+                update_timestamp: timestamp,
+                download_url: publicDownloadUrl,
+                latest_version_code: versionCode
+            };
+
+            await set(ref(db, `app_update/${targetAudience}`), updatePayload);
+
+            statusDiv.innerHTML = `<span class="success">✅ Update published successfully to ${targetAudience}!</span>`;
+            
+            // Reset form
+            document.getElementById('apkFile').value = '';
+            document.getElementById('dropZoneText').innerHTML = 'Drag & Drop your .apk file here<br>or click to browse';
+
+        } catch (error) {
+            console.error(error);
+            statusDiv.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+        } finally {
+            uploadBtn.disabled = false;
+        }
+    }
+
+    // Drag and Drop Logic
+    const dropZone = document.getElementById('dropZone');
+    const apkFileInput = document.getElementById('apkFile');
+    const dropZoneText = document.getElementById('dropZoneText');
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.add('dragover'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragover'), false);
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+            apkFileInput.files = files;
+            updateDropZoneText();
+        }
+    });
+
+    apkFileInput.addEventListener('change', updateDropZoneText);
+
+    function updateDropZoneText() {
+        if (apkFileInput.files.length > 0) {
+            dropZoneText.innerHTML = `<strong>Selected:</strong> ${apkFileInput.files[0].name}`;
+        } else {
+            dropZoneText.innerHTML = 'Drag & Drop your .apk file here<br>or click to browse';
+        }
+    }
+</script>
+
+</body>
+</html>
