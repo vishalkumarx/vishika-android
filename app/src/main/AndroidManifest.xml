@@ -99,6 +99,7 @@
         <activity
             android:name=".CultureActivity"
             android:exported="false"
+            android:windowSoftInputMode="adjustResize"
             android:label="Culture Exchange" />
             
         <service

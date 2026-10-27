@@ -297,6 +297,20 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        getOnBackPressedDispatcher().addCallback(this, new androidx.activity.OnBackPressedCallback(true) {
+            private long lastBackPress = 0;
+            @Override
+            public void handleOnBackPressed() {
+                long now = System.currentTimeMillis();
+                if (now - lastBackPress < 2000) {
+                    finish();
+                } else {
+                    lastBackPress = now;
+                    Toast.makeText(MainActivity.this, "Press back again to exit", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
         myDbNode = IS_VISHAL ? "locations/vishal" : "locations/rashika";
         partnerDbNode = IS_VISHAL ? "locations/rashika" : "locations/vishal";
         myLat = IS_VISHAL ? 31.663744 : 25.426241;
@@ -2358,12 +2372,18 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         TextView bubble = new TextView(this);
         bubble.setText(text);
         bubble.setTextSize(sizeSp);
-        bubble.setTextColor(android.graphics.Color.parseColor("#2D2036"));
+        boolean isComment = sizeSp < 20f;
+        bubble.setTextColor(android.graphics.Color.parseColor(isComment ? "#FFFFFF" : "#2D2036"));
         bubble.setMaxLines(3);
         bubble.setEllipsize(android.text.TextUtils.TruncateAt.END);
         bubble.setPadding((int) (10 * d), (int) (6 * d), (int) (10 * d), (int) (6 * d));
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setColor(android.graphics.Color.parseColor("#EEFFFFFF"));
+        if (isComment) {
+            bg.setOrientation(android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT);
+            bg.setColors(new int[]{android.graphics.Color.parseColor("#FF5C81"), android.graphics.Color.parseColor("#FF8FB1")});
+        } else {
+            bg.setColor(android.graphics.Color.parseColor("#EEFFFFFF"));
+        }
         bg.setCornerRadius(18 * d);
         bubble.setBackground(bg);
         bubble.setElevation(4 * d);

@@ -108,6 +108,16 @@ public class CultureActivity extends AppCompatActivity {
         editCultureName = findViewById(R.id.editCultureName);
         btnUploadImage = findViewById(R.id.btnUploadImage);
         btnSaveCulture = findViewById(R.id.btnSaveCulture);
+
+        View.OnFocusChangeListener scrollOnFocus = (v, hasFocus) -> {
+            if (hasFocus) {
+                v.postDelayed(() -> v.requestRectangleOnScreen(
+                        new android.graphics.Rect(0, 0, v.getWidth(), v.getHeight() + 120), false), 300);
+            }
+        };
+        editYoutubeLink.setOnFocusChangeListener(scrollOnFocus);
+        editDescription.setOnFocusChangeListener(scrollOnFocus);
+        editCultureName.setOnFocusChangeListener(scrollOnFocus);
         
         android.widget.RadioGroup rgMediaType = findViewById(R.id.rgMediaType);
         rgMediaType.setOnCheckedChangeListener((group, checkedId) -> {
