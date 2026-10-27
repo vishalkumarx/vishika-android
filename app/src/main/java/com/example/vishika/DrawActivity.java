@@ -23,6 +23,12 @@ public class DrawActivity extends AppCompatActivity {
     private DrawingView drawingView;
     private View lastSelectedColorView;
     private int lastSelectedColor = android.graphics.Color.parseColor("#FF4081");
+    private static final int[] COLOR_PALETTE = {
+        0xFFF44336, 0xFFE91E63, 0xFF9C27B0, 0xFF673AB7, 0xFF3F51B5,
+        0xFF2196F3, 0xFF03A9F4, 0xFF00BCD4, 0xFF009688, 0xFF4CAF50,
+        0xFF8BC34A, 0xFFCDDC39, 0xFFFFEB3B, 0xFFFFC107, 0xFFFF9800,
+        0xFFFF5722, 0xFF795548, 0xFF9E9E9E, 0xFF607D8B, 0xFF000000
+    };
     private View activeColorIndicator;
     private static final String SUPABASE_URL = "https://rftikfmjugzckousuyda.supabase.co";
     private static final String SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmdGlrZm1qdWd6Y2tvdXN1eWRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNTQ3MTAsImV4cCI6MjEwMzgzMDcxMH0.esfpZIkGdf9CG-F_KpeYn3bx8xTqxOCoHJ-lbE0kk9Q";
@@ -197,7 +203,9 @@ public class DrawActivity extends AppCompatActivity {
         activeColorIndicator = findViewById(R.id.activeColorIndicator);
         findViewById(R.id.btnColorChooser).setOnClickListener(v -> openColorPickerPanel());
         
-        int defaultColor = Color.HSVToColor(new float[]{0f, 1.0f, 1.0f});
+        // Random color picked from the palette (excluding the last entry, black)
+        int defaultColor = COLOR_PALETTE[new java.util.Random().nextInt(COLOR_PALETTE.length - 1)];
+        lastSelectedColor = defaultColor;
         if (drawingView != null) {
             drawingView.setCurrentColor(defaultColor);
         }
@@ -212,12 +220,7 @@ public class DrawActivity extends AppCompatActivity {
         View view = getLayoutInflater().inflate(R.layout.dialog_color_palette, null);
         android.widget.GridLayout gridColors = view.findViewById(R.id.gridColors);
         
-        int[] palette = {
-            0xFFF44336, 0xFFE91E63, 0xFF9C27B0, 0xFF673AB7, 0xFF3F51B5,
-            0xFF2196F3, 0xFF03A9F4, 0xFF00BCD4, 0xFF009688, 0xFF4CAF50,
-            0xFF8BC34A, 0xFFCDDC39, 0xFFFFEB3B, 0xFFFFC107, 0xFFFF9800,
-            0xFFFF5722, 0xFF795548, 0xFF9E9E9E, 0xFF607D8B, 0xFF000000
-        };
+        int[] palette = COLOR_PALETTE;
 
         int size = (int) (50 * getResources().getDisplayMetrics().density);
         int margin = (int) (6 * getResources().getDisplayMetrics().density);

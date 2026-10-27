@@ -31,4 +31,75 @@
         android:src="@drawable/ic_close"
         android:background="@drawable/bg_button_answer"
         android:elevation="4dp"/>
+
+    <TextView
+        android:id="@+id/txtFloatingLocket"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:maxWidth="280dp"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:background="@drawable/bg_button_answer"
+        android:elevation="6dp"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/locketActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#66000000"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/reactionRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <TextView android:id="@+id/react1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="10dp" android:text="❤️" android:textSize="28sp" />
+            <TextView android:id="@+id/react2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="10dp" android:text="😍" android:textSize="28sp" />
+            <TextView android:id="@+id/react3" android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="10dp" android:text="😂" android:textSize="28sp" />
+            <TextView android:id="@+id/react4" android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="10dp" android:text="🔥" android:textSize="28sp" />
+            <TextView android:id="@+id/react5" android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="10dp" android:text="🥺" android:textSize="28sp" />
+            <TextView android:id="@+id/react6" android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="10dp" android:text="🤤" android:textSize="28sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/commentRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <EditText
+                android:id="@+id/edtLocketComment"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="Add a comment..."
+                android:textColor="#FFFFFF"
+                android:textColorHint="#AAFFFFFF"
+                android:maxLines="2"
+                android:maxLength="100" />
+
+            <TextView
+                android:id="@+id/btnSendLocketComment"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:text="Send"
+                android:textColor="#FF4081"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
 </FrameLayout>
+

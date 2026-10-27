@@ -265,6 +265,9 @@ public class StoryViewerActivity extends AppCompatActivity {
         isPaused = false;
         currentIndex = index;
         Story story = stories.get(index);
+
+        btnStoryLike.setImageResource(R.drawable.ic_heart);
+        btnStoryLike.setImageTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.WHITE));
         
         // Update previous progress bars to 100% and future ones to 0%
         for (int i = 0; i < stories.size(); i++) {

@@ -80,14 +80,19 @@
     </androidx.constraintlayout.widget.ConstraintLayout>
 
     <!-- Content -->
-    <ScrollView
-        android:id="@+id/mainScrollView"
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefreshDashboard"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:clipToPadding="false"
-        android:paddingBottom="100dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/topBar">
+        app:layout_constraintTop_toBottomOf="@id/topBar"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <ScrollView
+            android:id="@+id/mainScrollView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="100dp">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -321,7 +326,14 @@
                                 android:background="@drawable/bg_button_answer"
                                 android:clickable="true"
                                 android:focusable="true"
-                                android:src="@drawable/ic_photo_placeholder" />
+                                 android:src="@drawable/ic_photo_placeholder" />
+
+                            <FrameLayout
+                                android:id="@+id/bubblesMyLocket"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:clickable="false"
+                                android:focusable="false" />
                                 
                             <ImageView
                                 android:id="@+id/btnUploadMyLocket"
@@ -365,13 +377,23 @@
                         android:orientation="vertical"
                         android:layout_marginStart="6dp">
 
-                        <ImageView
-                            android:id="@+id/imgPartnerLocket"
+                        <FrameLayout
                             android:layout_width="match_parent"
-                            android:layout_height="160dp"
-                            android:scaleType="center"
-                            android:background="@drawable/bg_button_answer"
-                            android:src="@drawable/ic_photo_placeholder" />
+                            android:layout_height="160dp">
+                            <ImageView
+                                android:id="@+id/imgPartnerLocket"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:scaleType="center"
+                                android:background="@drawable/bg_button_answer"
+                                android:src="@drawable/ic_photo_placeholder" />
+                            <FrameLayout
+                                android:id="@+id/bubblesPartnerLocket"
+                                android:layout_width="match_parent"
+                                android:layout_height="match_parent"
+                                android:clickable="false"
+                                android:focusable="false" />
+                        </FrameLayout>
 
                         <com.example.vishika.BoldTextView
                             android:id="@+id/txtPartnerLocketLabel"
@@ -391,6 +413,52 @@
                             android:textColor="#888888"
                             android:textSize="11sp"
                             android:gravity="center" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:layout_marginTop="6dp"
+                            android:weightSum="2">
+                            <com.example.vishika.BoldTextView
+                                android:id="@+id/btnLocketReact"
+                                android:layout_width="0dp"
+                                android:layout_height="38dp"
+                                android:layout_weight="1"
+                                android:layout_marginEnd="3dp"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:maxLines="1"
+                                android:gravity="center"
+                                android:text="😍 React"
+                                android:textColor="#2D2036"
+                                android:autoSizeTextType="uniform"
+                                android:autoSizeMinTextSize="8sp"
+                                android:autoSizeMaxTextSize="12sp"
+                                android:autoSizeStepGranularity="1sp"
+                                android:background="@drawable/bg_button_answer"
+                                android:clickable="true"
+                                android:focusable="true" />
+                            <com.example.vishika.BoldTextView
+                                android:id="@+id/btnLocketComment"
+                                android:layout_width="0dp"
+                                android:layout_height="38dp"
+                                android:layout_weight="1"
+                                android:layout_marginStart="3dp"
+                                android:paddingStart="4dp"
+                                android:paddingEnd="4dp"
+                                android:maxLines="1"
+                                android:gravity="center"
+                                android:text="💬 Comment"
+                                android:textColor="#2D2036"
+                                android:autoSizeTextType="uniform"
+                                android:autoSizeMinTextSize="8sp"
+                                android:autoSizeMaxTextSize="12sp"
+                                android:autoSizeStepGranularity="1sp"
+                                android:background="@drawable/bg_button_answer"
+                                android:clickable="true"
+                                android:focusable="true" />
+                        </LinearLayout>
                     </LinearLayout>
 
                 </LinearLayout>
@@ -705,6 +773,176 @@
 
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Culture Exchange Section -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="16dp"
+                android:gravity="center_vertical">
+                
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <com.example.vishika.BoldTextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/fredoka"
+                        android:text="Culture Exchange"
+                        android:textColor="#2D2036"
+                        android:textSize="22sp"
+                        android:textStyle="bold" />
+                        
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="know my culture"
+                        android:textColor="#888888"
+                        android:textSize="14sp"
+                        android:layout_marginTop="4dp" />
+                </LinearLayout>
+                    
+                <ImageView
+                    android:id="@+id/btnAddCulturePencil"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_add"
+                    android:background="@drawable/bg_button_answer"
+                    android:padding="6dp"
+                    android:elevation="2dp"
+                    android:layout_marginEnd="8dp"
+                    app:tint="#2D2036"
+                    android:visibility="gone"/>
+                    
+                <ImageView
+                    android:id="@+id/btnEditCulturePencil"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:src="@drawable/ic_edit"
+                    android:background="@drawable/bg_button_answer"
+                    android:padding="6dp"
+                    android:elevation="2dp"
+                    app:tint="#2D2036"
+                    android:visibility="gone"/>
+            </LinearLayout>
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/bg_card_pink"
+                android:padding="16dp">
+                
+                <LinearLayout
+                    android:id="@+id/cultureTabs"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="12dp"
+                    app:layout_constraintTop_toTopOf="parent">
+                    
+                    <TextView
+                        android:id="@+id/tabPartnerCulture"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Partner's"
+                        android:textStyle="bold"
+                        android:textColor="#FF4081"
+                        android:gravity="center"
+                        android:padding="8dp"
+                        android:background="@drawable/bg_pill_day"/>
+                        
+                    <TextView
+                        android:id="@+id/tabMyCulture"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Mine"
+                        android:textStyle="bold"
+                        android:textColor="#888888"
+                        android:gravity="center"
+                        android:padding="8dp"
+                        android:background="@android:color/transparent"/>
+                </LinearLayout>
+
+                <FrameLayout
+                    android:id="@+id/culturePreviewContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:layout_constraintTop_toBottomOf="@id/cultureTabs"
+                    android:background="#E0E0E0">
+                    
+                    <LinearLayout
+                        android:id="@+id/layoutCultureImagesPreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <androidx.viewpager2.widget.ViewPager2
+                            android:id="@+id/vpCulturePreview"
+                            android:layout_width="match_parent"
+                            android:layout_height="250dp" />
+
+                        <com.google.android.material.tabs.TabLayout
+                            android:id="@+id/tabLayoutCulturePreview"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="@android:color/transparent"
+                            app:tabBackground="@drawable/tab_selector"
+                            app:tabGravity="center"
+                            app:tabIndicatorHeight="0dp"
+                            app:tabPaddingStart="8dp"
+                            app:tabPaddingEnd="8dp"
+                            app:tabRippleColor="@null" />
+                    </LinearLayout>
+                        
+                    <WebView
+                        android:id="@+id/webviewCulturePreview"
+                        android:layout_width="match_parent"
+                        android:layout_height="250dp"
+                        android:visibility="gone" />
+                        
+                    <TextView
+                        android:id="@+id/textCultureNoMedia"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:text="No media yet"
+                        android:textColor="#888888" />
+                </FrameLayout>
+
+                <TextView
+                    android:id="@+id/textCulturePreviewName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    app:layout_constraintTop_toBottomOf="@id/culturePreviewContainer"
+                    android:text="Culture Name"
+                    android:textColor="#2D2036"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/textCulturePreviewDesc"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    app:layout_constraintTop_toBottomOf="@id/textCulturePreviewName"
+                    android:text="Description goes here..."
+                    android:textColor="#333333"
+                    android:textSize="14sp" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+        
+
 
             <!-- Walkie Talkie Card -->
             <androidx.constraintlayout.widget.ConstraintLayout
@@ -963,10 +1201,9 @@
                     app:layout_constraintStart_toStartOf="parent"
                     app:layout_constraintEnd_toEndOf="parent" />
 
-            </androidx.constraintlayout.widget.ConstraintLayout>
-
-        </LinearLayout>
-    </ScrollView>
+            </androidx.constraintlayout.widget.ConstraintLayout></LinearLayout>
+        </ScrollView>
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <!-- Bottom Navigation Bar -->
     <LinearLayout

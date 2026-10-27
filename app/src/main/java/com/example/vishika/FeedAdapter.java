@@ -57,7 +57,11 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.FeedViewHolder
         
         // Formatted caption with bold username (Instagram style)
         String formattedCaption = post.caption != null ? post.caption.replace("\n", "<br>") : "";
-        String captionText = "<b>" + post.authorName + "</b> " + formattedCaption;
+        String captionText = "<b>" + post.authorName + "</b> ";
+        if ("Culture Exchange".equals(post.location)) {
+            captionText += "<font color=\"#888888\">[Culture Exchange]</font> ";
+        }
+        captionText += formattedCaption;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
             holder.tvCaption.setText(android.text.Html.fromHtml(captionText, android.text.Html.FROM_HTML_MODE_LEGACY));
         } else {
@@ -72,10 +76,28 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.FeedViewHolder
         holder.tvTimestamp.setText(timeAgo);
 
         // Load post image
-        Glide.with(context)
-                .load(post.imageUrl)
-                .placeholder(R.drawable.ic_photo_placeholder)
-                .into(holder.ivPostImage);
+        if ("youtube".equals(post.mediaType) && post.imageUrl != null) {
+            holder.ivPostImage.setVisibility(View.GONE);
+            holder.wvPostVideo.setVisibility(View.VISIBLE);
+            holder.wvPostVideo.getSettings().setJavaScriptEnabled(true);
+            holder.wvPostVideo.getSettings().setDomStorageEnabled(true);
+            holder.wvPostVideo.getSettings().setMediaPlaybackRequiresUserGesture(false);
+            holder.wvPostVideo.setWebChromeClient(new android.webkit.WebChromeClient());
+            String videoId = extractYoutubeId(post.imageUrl);
+            if (videoId != null) {
+                String html = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head><body style='margin:0;padding:0;'><iframe width=\"100%\" height=\"100%\" src=\"https://www.youtube.com/embed/" + videoId + "?autoplay=0&controls=1&rel=0&origin=https://www.youtube.com\" frameborder=\"0\" allow=\"fullscreen\"></iframe></body></html>";
+                holder.wvPostVideo.loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "utf-8", null);
+            }
+        } else {
+            holder.wvPostVideo.setVisibility(View.GONE);
+            holder.ivPostImage.setVisibility(View.VISIBLE);
+            if (post.imageUrl != null) {
+                Glide.with(context)
+                        .load(post.imageUrl)
+                        .placeholder(R.drawable.ic_photo_placeholder)
+                        .into(holder.ivPostImage);
+            }
+        }
 
         // Load author profile picture
         FirebaseDatabase.getInstance().getReference()
@@ -292,6 +314,14 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.FeedViewHolder
         dialog.show();
     }
 
+    private String extractYoutubeId(String url) {
+        String pattern = "(?<=watch\\?v=|/videos/|embed\\/|youtu.be\\/|\\/v\\/|\\/e\\/|watch\\?v%3D|watch\\?feature=player_embedded&v=|%2Fvideos%2F|embed%\u200C\u200B2F|youtu.be%2F|%2Fv%2F)[^#\\&\\?\\n]*";
+        java.util.regex.Pattern compiledPattern = java.util.regex.Pattern.compile(pattern);
+        java.util.regex.Matcher matcher = compiledPattern.matcher(url);
+        if (matcher.find()) return matcher.group();
+        return null;
+    }
+
     @Override
     public int getItemCount() {
         return posts.size();
@@ -299,6 +329,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.FeedViewHolder
 
     static class FeedViewHolder extends RecyclerView.ViewHolder {
         ImageView ivAuthorAvatar, ivPostImage, ivLike, ivComment, ivHeartAnim, ivMore;
+        android.webkit.WebView wvPostVideo;
         TextView tvAuthorName, tvLikesCount, tvCaption, tvTimestamp, tvViewComments, tvCommentCount;
         long lastClickTime = 0;
 
@@ -309,6 +340,7 @@ public class FeedAdapter extends RecyclerView.Adapter<FeedAdapter.FeedViewHolder
 
             ivMore = itemView.findViewById(R.id.ivMore);
             ivPostImage = itemView.findViewById(R.id.ivPostImage);
+            wvPostVideo = itemView.findViewById(R.id.wvPostVideo);
             ivLike = itemView.findViewById(R.id.ivLike);
             ivComment = itemView.findViewById(R.id.ivComment);
             ivHeartAnim = itemView.findViewById(R.id.ivHeartAnim);

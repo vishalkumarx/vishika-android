@@ -96,6 +96,11 @@
             android:exported="false"
             android:label="Location History" />
             
+        <activity
+            android:name=".CultureActivity"
+            android:exported="false"
+            android:label="Culture Exchange" />
+            
         <service
             android:name=".MoodService"
             android:foregroundServiceType="specialUse"

@@ -36,6 +36,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -341,6 +342,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         FrameLayout navFeed = findViewById(R.id.navFeed);
         FrameLayout navHome = findViewById(R.id.navHome);
         
+        androidx.swiperefreshlayout.widget.SwipeRefreshLayout swipeRefreshDashboard = findViewById(R.id.swipeRefreshDashboard);
+        swipeRefreshDashboard.setOnRefreshListener(() -> {
+            new android.os.Handler().postDelayed(() -> {
+                swipeRefreshDashboard.setRefreshing(false);
+            }, 1000);
+        });
+        
         navHome.setOnClickListener(new android.view.View.OnClickListener() {
             long lastClickTime = 0;
             @Override
@@ -370,7 +378,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         });
         
         btnRefreshMap.setOnClickListener(v -> {
-            Toast.makeText(this, "Centering map...", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Updating map...", Toast.LENGTH_SHORT).show();
             updateDistanceUI();
         });
         
@@ -498,6 +506,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             });
         }
         
+        
+        setupCulturePreview();
+
         setupMoodListeners();
         setupSoundListeners();
         setupOnlineStatusListener();
@@ -1068,6 +1079,23 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
     
     private void setupOnlineStatusListener() {
+        String myDbNode = IS_VISHAL ? "vishal" : "rashika";
+        DatabaseReference connectedRef = database.getRoot().child(".info/connected");
+        DatabaseReference myStatusRef = database.child("status").child(myDbNode).child("online");
+        
+        connectedRef.addValueEventListener(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                boolean connected = Boolean.TRUE.equals(snapshot.getValue(Boolean.class));
+                if (connected) {
+                    myStatusRef.onDisconnect().setValue(false);
+                    myStatusRef.setValue(true);
+                }
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        });
+
         String partnerDbNode = IS_VISHAL ? "rashika" : "vishal";
         String partnerDisplayName = IS_VISHAL ? "Rashika" : "Vishal";
         DatabaseReference statusRef = database.child("status").child(partnerDbNode).child("online");
@@ -1872,6 +1900,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     com.yalantis.ucrop.UCrop.Options options = new com.yalantis.ucrop.UCrop.Options();
                     options.setHideBottomControls(false);
                     options.setFreeStyleCropEnabled(true);
+                    options.setAspectRatioOptions(0,
+                            new com.yalantis.ucrop.model.AspectRatio("1:1", 1, 1),
+                            new com.yalantis.ucrop.model.AspectRatio("2:3", 2, 3),
+                            new com.yalantis.ucrop.model.AspectRatio("4:5", 4, 5)
+                    );
                     options.setToolbarColor(android.graphics.Color.parseColor("#FF4081"));
                     options.setStatusBarColor(android.graphics.Color.parseColor("#C51162"));
                     options.setToolbarWidgetColor(android.graphics.Color.WHITE);
@@ -1975,6 +2008,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     long expiry = System.currentTimeMillis() + (24L * 60 * 60 * 1000);
                     database.child(myLocketNode).child("url").setValue(publicUrl);
                     database.child(myLocketNode).child("expiry").setValue(expiry);
+                    database.child(myLocketNode).child("reaction").removeValue();
+                    database.child(myLocketNode).child("comment").removeValue();
                     final long finalExpiry = expiry;
                     runOnUiThread(() -> {
                         loadLocketImage(publicUrl, finalExpiry, true);
@@ -1994,6 +2029,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void setupLocketListeners() {
+        setupLocketInteractions();
         String partnerName = IS_VISHAL ? "Rashika" : "Vishal";
         TextView txtPartnerLabel = findViewById(R.id.txtPartnerLocketLabel);
         if (txtPartnerLabel != null) txtPartnerLabel.setText(partnerName + "'s photo");
@@ -2062,6 +2098,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
     
     private void showFullScreenImage(String imageUrl) {
+        showFullScreenImage(imageUrl, null, false);
+    }
+
+    private void showFullScreenImage(String imageUrl, String locketNode, boolean canReact) {
         if (isFinishing() || isDestroyed()) return;
         
         android.app.Dialog dialog = new android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
@@ -2089,8 +2129,274 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         
         btnClose.setOnClickListener(v -> dialog.dismiss());
         dialog.findViewById(R.id.fullScreenContainer).setOnClickListener(v -> dialog.dismiss());
-        
+
+        final TextView floating = dialog.findViewById(R.id.txtFloatingLocket);
+        final android.view.View actions = dialog.findViewById(R.id.locketActions);
+        final String myName = IS_VISHAL ? "vishal" : "rashika";
+        ValueEventListener reactionListener = null;
+        DatabaseReference locketRef = null;
+
+        if (locketNode != null) {
+            locketRef = database.child(locketNode);
+            if (canReact) {
+                actions.setVisibility(android.view.View.VISIBLE);
+                final DatabaseReference ref = locketRef;
+                int[] ids = {R.id.react1, R.id.react2, R.id.react3, R.id.react4, R.id.react5, R.id.react6};
+                for (int id : ids) {
+                    TextView t = dialog.findViewById(id);
+                    t.setOnClickListener(v -> {
+                        java.util.Map<String, Object> m = new java.util.HashMap<>();
+                        m.put("emoji", t.getText().toString());
+                        m.put("from", myName);
+                        m.put("ts", System.currentTimeMillis());
+                        ref.child("reaction").setValue(m);
+                        showFloatingLocketBubble(floating, t.getText().toString(), 42f);
+                    });
+                }
+                final android.widget.EditText edt = dialog.findViewById(R.id.edtLocketComment);
+                dialog.findViewById(R.id.btnSendLocketComment).setOnClickListener(v -> {
+                    String text = edt.getText().toString().trim();
+                    if (text.isEmpty()) return;
+                    java.util.Map<String, Object> m = new java.util.HashMap<>();
+                    m.put("text", text);
+                    m.put("from", myName);
+                    m.put("ts", System.currentTimeMillis());
+                    ref.child("comment").setValue(m);
+                    edt.setText("");
+                    showFloatingLocketBubble(floating, text, 18f);
+                });
+                // Let the keyboard resize the dialog so the input stays visible
+                if (dialog.getWindow() != null) {
+                    dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+                }
+            } else {
+                // Owner: show what the partner sent, floating over the photo
+                reactionListener = new ValueEventListener() {
+                    @Override public void onDataChange(@NonNull DataSnapshot snap) {
+                        String emoji = snap.child("reaction").child("emoji").getValue(String.class);
+                        String text = snap.child("comment").child("text").getValue(String.class);
+                        if (emoji != null) showFloatingLocketBubble(floating, emoji, 42f);
+                        if (text != null) {
+                            floating.postDelayed(() -> showFloatingLocketBubble(floating, text, 18f), emoji != null ? 2800 : 0);
+                        }
+                    }
+                    @Override public void onCancelled(@NonNull DatabaseError error) {}
+                };
+                locketRef.addListenerForSingleValueEvent(reactionListener);
+                reactionListener = null;
+            }
+        }
+
         dialog.show();
+    }
+
+    private void setupLocketInteractions() {
+        FrameLayout bubblesMy = findViewById(R.id.bubblesMyLocket);
+        FrameLayout bubblesPartner = findViewById(R.id.bubblesPartnerLocket);
+        attachLocketBubbles(myLocketNode, bubblesMy, false);
+        attachLocketBubbles(partnerLocketNode, bubblesPartner, true);
+
+        final String myName = IS_VISHAL ? "vishal" : "rashika";
+        final String[] emojis = {"❤️", "😍", "😂", "🔥", "🥺", "🤤"};
+
+        android.view.View btnReact = findViewById(R.id.btnLocketReact);
+        if (btnReact != null) {
+            btnReact.setOnClickListener(v -> {
+                if (partnerLocketUrl == null) {
+                    Toast.makeText(this, "No photo to react to yet", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                final android.app.AlertDialog[] dlg = new android.app.AlertDialog[1];
+                android.widget.GridLayout grid = new android.widget.GridLayout(this);
+                grid.setColumnCount(3);
+                int pad = (int) (16 * getResources().getDisplayMetrics().density);
+                grid.setPadding(pad, pad, pad, pad);
+                for (String emoji : emojis) {
+                    TextView t = new TextView(this);
+                    t.setText(emoji);
+                    t.setTextSize(48f);
+                    t.setGravity(android.view.Gravity.CENTER);
+                    android.widget.GridLayout.LayoutParams glp = new android.widget.GridLayout.LayoutParams(
+                            android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f),
+                            android.widget.GridLayout.spec(android.widget.GridLayout.UNDEFINED, 1f));
+                    glp.width = 0;
+                    glp.height = android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
+                    t.setLayoutParams(glp);
+                    t.setPadding(0, pad / 2, 0, pad / 2);
+                    t.setOnClickListener(x -> {
+                        java.util.Map<String, Object> m = new java.util.HashMap<>();
+                        m.put("emoji", emoji);
+                        m.put("from", myName);
+                        m.put("ts", System.currentTimeMillis());
+                        database.child(partnerLocketNode).child("reaction").setValue(m);
+                        sendLocketNotification("reacted " + emoji + " to your photo.");
+                        if (dlg[0] != null) dlg[0].dismiss();
+                    });
+                    grid.addView(t);
+                }
+                dlg[0] = new android.app.AlertDialog.Builder(this)
+                        .setTitle("Add reaction")
+                        .setView(grid)
+                        .setNeutralButton("Remove reaction",
+                                (d, w) -> database.child(partnerLocketNode).child("reaction").removeValue())
+                        .show();
+            });
+        }
+
+        android.view.View btnComment = findViewById(R.id.btnLocketComment);
+        if (btnComment != null) {
+            btnComment.setOnClickListener(v -> {
+                if (partnerLocketUrl == null) {
+                    Toast.makeText(this, "No photo to comment on yet", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                android.view.View content = getLayoutInflater().inflate(R.layout.dialog_locket_comment, null);
+                final android.widget.EditText edt = content.findViewById(R.id.edtLocketCommentDialog);
+                final TextView counter = content.findViewById(R.id.txtCommentCounter);
+                final TextView title = content.findViewById(R.id.txtCommentDialogTitle);
+                final android.view.View btnSend = content.findViewById(R.id.btnSendLocketCommentDialog);
+                final android.view.View btnCancel = content.findViewById(R.id.btnCancelLocketCommentDialog);
+                final android.view.View btnDelete = content.findViewById(R.id.btnDeleteLocketCommentDialog);
+
+                edt.setText(sentCommentText);
+                edt.setSelection(edt.getText().length());
+                counter.setText(edt.getText().length() + "/100");
+                edt.addTextChangedListener(new android.text.TextWatcher() {
+                    @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
+                    @Override public void onTextChanged(CharSequence s, int st, int b, int c) {
+                        counter.setText(s.length() + "/100");
+                    }
+                    @Override public void afterTextChanged(android.text.Editable s) {}
+                });
+                if (!sentCommentText.isEmpty()) {
+                    title.setText("Edit your comment");
+                    btnDelete.setVisibility(android.view.View.VISIBLE);
+                }
+
+                final android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(this)
+                        .setView(content)
+                        .create();
+                if (dialog.getWindow() != null) {
+                    dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                    dialog.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+                }
+                btnSend.setOnClickListener(x -> {
+                    String text = edt.getText().toString().trim();
+                    if (text.isEmpty()) return;
+                    java.util.Map<String, Object> m = new java.util.HashMap<>();
+                    m.put("text", text);
+                    m.put("from", myName);
+                    m.put("ts", System.currentTimeMillis());
+                    database.child(partnerLocketNode).child("comment").setValue(m);
+                    sendLocketNotification("commented on your photo: " + text);
+                    dialog.dismiss();
+                });
+                btnCancel.setOnClickListener(x -> dialog.dismiss());
+                btnDelete.setOnClickListener(x -> {
+                    database.child(partnerLocketNode).child("comment").removeValue();
+                    dialog.dismiss();
+                });
+                dialog.show();
+            });
+        }
+    }
+
+    private String sentCommentText = "";
+
+    private void attachLocketBubbles(String node, FrameLayout container, boolean editable) {
+        if (container == null) return;
+        database.child(node).addValueEventListener(new ValueEventListener() {
+            @Override public void onDataChange(@NonNull DataSnapshot snap) {
+                container.removeAllViews();
+                if (editable) sentCommentText = "";
+                if (snap.child("url").getValue(String.class) == null) return;
+                String emoji = snap.child("reaction").child("emoji").getValue(String.class);
+                String text = snap.child("comment").child("text").getValue(String.class);
+                if (emoji != null) {
+                    TextView b = addLocketBubble(container, emoji, 30f, android.view.Gravity.TOP | android.view.Gravity.END, 0);
+                    if (editable) b.setOnClickListener(v -> confirmEditLocketItem("reaction", node, R.id.btnLocketReact));
+                }
+                if (text != null) {
+                    TextView b = addLocketBubble(container, text, 12f, android.view.Gravity.BOTTOM | android.view.Gravity.START, 400);
+                    if (editable) {
+                        sentCommentText = text;
+                        b.setOnClickListener(v -> confirmEditLocketItem("comment", node, R.id.btnLocketComment));
+                    }
+                }
+            }
+            @Override public void onCancelled(@NonNull DatabaseError error) {}
+        });
+    }
+
+    private void sendLocketNotification(String text) {
+        String myId = IS_VISHAL ? "vishal" : "rashika";
+        String partnerId = IS_VISHAL ? "rashika" : "vishal";
+        String myName = IS_VISHAL ? "Vishal" : "Rashika";
+        DatabaseReference notifRef = FirebaseDatabase.getInstance().getReference("notifications").child(partnerId);
+        String notifId = notifRef.push().getKey();
+        if (notifId != null) {
+            AppNotification n = new AppNotification(notifId, "locket_reaction", myId, myName, text, System.currentTimeMillis(), "");
+            notifRef.child(notifId).setValue(n);
+        }
+    }
+
+    private void confirmEditLocketItem(String child, String node, int editButtonId) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(child.equals("reaction") ? "Your reaction" : "Your comment")
+                .setItems(new String[]{"Edit", "Remove"}, (d, which) -> {
+                    if (which == 0) {
+                        android.view.View btn = findViewById(editButtonId);
+                        if (btn != null) btn.performClick();
+                    } else {
+                        database.child(node).child(child).removeValue();
+                    }
+                }).show();
+    }
+
+    private TextView addLocketBubble(FrameLayout container, String text, float sizeSp, int gravity, long delay) {
+        float d = getResources().getDisplayMetrics().density;
+        TextView bubble = new TextView(this);
+        bubble.setText(text);
+        bubble.setTextSize(sizeSp);
+        bubble.setTextColor(android.graphics.Color.parseColor("#2D2036"));
+        bubble.setMaxLines(3);
+        bubble.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        bubble.setPadding((int) (10 * d), (int) (6 * d), (int) (10 * d), (int) (6 * d));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(android.graphics.Color.parseColor("#EEFFFFFF"));
+        bg.setCornerRadius(18 * d);
+        bubble.setBackground(bg);
+        bubble.setElevation(4 * d);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        lp.gravity = gravity;
+        lp.setMargins((int) (6 * d), (int) (6 * d), (int) (6 * d), (int) (6 * d));
+        bubble.setLayoutParams(lp);
+        container.addView(bubble);
+        bubble.setClickable(true);
+        if (container.getWidth() > 0) bubble.setMaxWidth((int) (container.getWidth() - 12 * d));
+        else bubble.setMaxWidth((int) (130 * d));
+
+        android.animation.ObjectAnimator bob = android.animation.ObjectAnimator.ofFloat(bubble, "translationY", 0f, -6 * d);
+        bob.setDuration(1400);
+        bob.setStartDelay(delay);
+        bob.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        bob.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        bob.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+        bob.start();
+        return bubble;
+    }
+
+    private void showFloatingLocketBubble(TextView bubble, String text, float sizeSp) {
+        if (bubble == null) return;
+        bubble.animate().cancel();
+        bubble.setText(text);
+        bubble.setTextSize(sizeSp);
+        bubble.setVisibility(android.view.View.VISIBLE);
+        bubble.setAlpha(1f);
+        bubble.setTranslationY(120f);
+        bubble.animate().translationY(-300f).alpha(0f).setDuration(2600)
+                .withEndAction(() -> bubble.setVisibility(android.view.View.GONE)).start();
     }
 
     private void updateLocketTimers() {
@@ -2108,6 +2414,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             } else {
                 myTimerTxt.setText("No Photo");
                 myLocketExpiry = null;
+                database.child(myLocketNode).removeValue();
+                resetLocketSlot(true);
             }
         }
         
@@ -2120,6 +2428,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             } else {
                 partnerTimerTxt.setText("Waiting...");
                 partnerLocketExpiry = null;
+                database.child(partnerLocketNode).removeValue();
+                resetLocketSlot(false);
             }
         }
     }
@@ -2130,8 +2440,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         ImageView imgView  = findViewById(imgId);
         TextView  timerTxt = findViewById(timerId);
         
-        if (isMine) myLocketExpiry = null;
-        else partnerLocketExpiry = null;
+        if (isMine) { myLocketExpiry = null; myLocketUrl = null; }
+        else { partnerLocketExpiry = null; partnerLocketUrl = null; }
         
         if (imgView  != null) {
             imgView.setScaleType(android.widget.ImageView.ScaleType.CENTER);
@@ -2481,5 +2791,162 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error uploading update", Toast.LENGTH_LONG).show());
             }
         }).start();
+    }
+    
+    private void setupCulturePreview() {
+        TextView tabPartner = findViewById(R.id.tabPartnerCulture);
+        TextView tabMine = findViewById(R.id.tabMyCulture);
+        ImageView btnEditCulturePencil = findViewById(R.id.btnEditCulturePencil);
+        ImageView btnAddCulturePencil = findViewById(R.id.btnAddCulturePencil);
+        androidx.viewpager2.widget.ViewPager2 vpCulturePreview = findViewById(R.id.vpCulturePreview);
+        com.google.android.material.tabs.TabLayout tabLayoutCulturePreview = findViewById(R.id.tabLayoutCulturePreview);
+        LinearLayout layoutCultureImagesPreview = findViewById(R.id.layoutCultureImagesPreview);
+        java.util.List<String> previewImageUrls = new java.util.ArrayList<>();
+        CultureImageAdapter previewAdapter = new CultureImageAdapter(this, previewImageUrls);
+        vpCulturePreview.setAdapter(previewAdapter);
+        new com.google.android.material.tabs.TabLayoutMediator(tabLayoutCulturePreview, vpCulturePreview, (tab, position) -> {}).attach();
+        android.webkit.WebView webviewCulturePreview = findViewById(R.id.webviewCulturePreview);
+        TextView textCultureNoMedia = findViewById(R.id.textCultureNoMedia);
+        TextView textCulturePreviewDesc = findViewById(R.id.textCulturePreviewDesc);
+        TextView textCulturePreviewName = findViewById(R.id.textCulturePreviewName);
+        
+        if (tabPartner == null) return;
+        
+        webviewCulturePreview.getSettings().setJavaScriptEnabled(true);
+        webviewCulturePreview.getSettings().setDomStorageEnabled(true);
+        webviewCulturePreview.getSettings().setMediaPlaybackRequiresUserGesture(false);
+        webviewCulturePreview.setWebChromeClient(new android.webkit.WebChromeClient());
+        
+        final boolean[] isViewingMine = {false};
+        
+        Runnable updateTabs = () -> {
+            if (isViewingMine[0]) {
+                tabMine.setBackgroundResource(R.drawable.bg_pill_day);
+                tabMine.setTextColor(android.graphics.Color.parseColor("#FF4081"));
+                tabPartner.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                tabPartner.setTextColor(android.graphics.Color.parseColor("#888888"));
+                btnEditCulturePencil.setVisibility(View.VISIBLE);
+                btnAddCulturePencil.setVisibility(View.VISIBLE);
+            } else {
+                tabPartner.setBackgroundResource(R.drawable.bg_pill_day);
+                tabPartner.setTextColor(android.graphics.Color.parseColor("#FF4081"));
+                tabMine.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+                tabMine.setTextColor(android.graphics.Color.parseColor("#888888"));
+                btnEditCulturePencil.setVisibility(View.GONE);
+                btnAddCulturePencil.setVisibility(View.GONE);
+            }
+        };
+        
+        ValueEventListener cultureListener = new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (!snapshot.exists()) {
+                    layoutCultureImagesPreview.setVisibility(View.GONE);
+                    webviewCulturePreview.setVisibility(View.GONE);
+                    textCultureNoMedia.setVisibility(View.VISIBLE);
+                    textCulturePreviewDesc.setText("");
+                    return;
+                }
+                String mediaType = snapshot.child("mediaType").getValue(String.class);
+                String mediaUrl = snapshot.child("mediaUrl").getValue(String.class);
+                String description = snapshot.child("description").getValue(String.class);
+                String cultureName = snapshot.child("cultureName").getValue(String.class);
+                
+                textCultureNoMedia.setVisibility(View.GONE);
+                
+                if ("youtube".equals(mediaType) && mediaUrl != null) {
+                    layoutCultureImagesPreview.setVisibility(View.GONE);
+                    webviewCulturePreview.setVisibility(View.VISIBLE);
+                    String videoId = extractYoutubeId(mediaUrl);
+                    if (videoId != null) {
+                        String html = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"></head><body style='margin:0;padding:0;'><iframe width=\"100%\" height=\"100%\" src=\"https://www.youtube.com/embed/" + videoId + "?autoplay=0&controls=1&rel=0&origin=https://www.youtube.com\" frameborder=\"0\" allow=\"fullscreen\"></iframe></body></html>";
+                        webviewCulturePreview.loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "utf-8", null);
+                    }
+                } else if ("image".equals(mediaType) && mediaUrl != null) {
+                    webviewCulturePreview.setVisibility(View.GONE);
+                    webviewCulturePreview.loadUrl("about:blank");
+                    
+                    String[] urls = mediaUrl.split(",");
+                    previewImageUrls.clear();
+                    previewImageUrls.addAll(java.util.Arrays.asList(urls));
+                    previewAdapter.notifyDataSetChanged();
+                    
+                    layoutCultureImagesPreview.setVisibility(View.VISIBLE);
+                } else {
+                    layoutCultureImagesPreview.setVisibility(View.GONE);
+                    webviewCulturePreview.setVisibility(View.GONE);
+                    textCultureNoMedia.setVisibility(View.VISIBLE);
+                }
+                
+                if (cultureName != null && !cultureName.isEmpty()) {
+                    textCulturePreviewName.setText(capitalizeWords(cultureName));
+                    textCulturePreviewName.setVisibility(View.VISIBLE);
+                } else {
+                    textCulturePreviewName.setVisibility(View.GONE);
+                }
+                
+                textCulturePreviewDesc.setText(description != null ? description : "");
+            }
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        };
+        
+        Runnable loadCulture = () -> {
+            String target = isViewingMine[0] ? (IS_VISHAL ? "vishal" : "rashika") : (IS_VISHAL ? "rashika" : "vishal");
+            // Remove previous listener to prevent leaks
+            database.child("culture").child(IS_VISHAL ? "vishal" : "rashika").removeEventListener(cultureListener);
+            database.child("culture").child(IS_VISHAL ? "rashika" : "vishal").removeEventListener(cultureListener);
+            database.child("culture").child(target).addValueEventListener(cultureListener);
+        };
+        
+        tabPartner.setOnClickListener(v -> {
+            isViewingMine[0] = false;
+            updateTabs.run();
+            loadCulture.run();
+        });
+        
+        tabMine.setOnClickListener(v -> {
+            isViewingMine[0] = true;
+            updateTabs.run();
+            loadCulture.run();
+        });
+        
+        btnEditCulturePencil.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, CultureActivity.class);
+            intent.putExtra("IS_EDITING", true);
+            intent.putExtra("IS_ADDING", false);
+            startActivity(intent);
+        });
+        
+        btnAddCulturePencil.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, CultureActivity.class);
+            intent.putExtra("IS_EDITING", true);
+            intent.putExtra("IS_ADDING", true);
+            startActivity(intent);
+        });
+
+        loadCulture.run();
+    }
+    
+    private String extractYoutubeId(String url) {
+        String pattern = "(?<=watch\\?v=|/videos/|embed\\/|youtu.be\\/|\\/v\\/|\\/e\\/|watch\\?v%3D|watch\\?feature=player_embedded&v=|%2Fvideos%2F|embed%\u200C\u200B2F|youtu.be%2F|%2Fv%2F)[^#\\&\\?\\n]*";
+        java.util.regex.Pattern compiledPattern = java.util.regex.Pattern.compile(pattern);
+        java.util.regex.Matcher matcher = compiledPattern.matcher(url);
+        if (matcher.find()) return matcher.group();
+        return null;
+    }
+    
+    private String capitalizeWords(String str) {
+        if (str == null || str.isEmpty()) return str;
+        String[] words = str.split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String word : words) {
+            if (word.length() > 0) {
+                sb.append(Character.toUpperCase(word.charAt(0)))
+                  .append(word.substring(1).toLowerCase())
+                  .append(" ");
+            }
+        }
+        return sb.toString().trim();
     }
 }

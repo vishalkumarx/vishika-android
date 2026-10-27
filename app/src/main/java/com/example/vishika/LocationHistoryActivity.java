@@ -215,16 +215,88 @@ public class LocationHistoryActivity extends AppCompatActivity implements OnMapR
             pathPoints.add(new LatLng(model.getLat(), model.getLng()));
         }
 
-        // Draw Path (Polygon/Polyline)
-        PolylineOptions polylineOptions = new PolylineOptions()
-                .addAll(pathPoints)
-                .color(Color.parseColor("#FF4081")) // Pink line
-                .width(10f)
-                .geodesic(true);
-        mMap.addPolyline(polylineOptions);
+        List<LocationHistoryModel> routingLocations = new ArrayList<>();
+        if (locations.size() > 90) {
+            int step = (int) Math.ceil((double) locations.size() / 90.0);
+            for (int i = 0; i < locations.size(); i += step) {
+                routingLocations.add(locations.get(i));
+            }
+            if (!routingLocations.contains(locations.get(locations.size() - 1))) {
+                routingLocations.add(locations.get(locations.size() - 1));
+            }
+        } else {
+            routingLocations.addAll(locations);
+        }
 
-        // Add Markers for ALL places asynchronously to avoid blocking UI
-        for (int i = 0; i < pathPoints.size(); i++) {
+        StringBuilder coordinatesBuilder = new StringBuilder();
+        for (int i = 0; i < routingLocations.size(); i++) {
+            LocationHistoryModel model = routingLocations.get(i);
+            coordinatesBuilder.append(model.getLng()).append(",").append(model.getLat());
+            if (i < routingLocations.size() - 1) {
+                coordinatesBuilder.append(";");
+            }
+        }
+
+        if (routingLocations.size() > 1) {
+            executorService.execute(() -> {
+                try {
+                    String urlString = "http://router.project-osrm.org/route/v1/driving/" + coordinatesBuilder.toString() + "?overview=full&geometries=polyline";
+                    java.net.URL url = new java.net.URL(urlString);
+                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(conn.getInputStream()));
+                    String inputLine;
+                    StringBuilder response = new StringBuilder();
+                    while ((inputLine = in.readLine()) != null) response.append(inputLine);
+                    in.close();
+                    
+                    org.json.JSONObject jsonResponse = new org.json.JSONObject(response.toString());
+                    String polylineStr = jsonResponse.getJSONArray("routes").getJSONObject(0).getString("geometry");
+                    List<LatLng> decodedPath = decodePolyline(polylineStr);
+                    
+                    mainHandler.post(() -> {
+                        if (mMap != null) {
+                            PolylineOptions polylineOptions = new PolylineOptions()
+                                    .addAll(decodedPath)
+                                    .color(Color.parseColor("#FF4081")) // Pink line
+                                    .width(10f)
+                                    .geodesic(true);
+                            mMap.addPolyline(polylineOptions);
+                        }
+                    });
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    mainHandler.post(() -> {
+                        if (mMap != null) {
+                            PolylineOptions polylineOptions = new PolylineOptions()
+                                    .addAll(pathPoints)
+                                    .color(Color.parseColor("#FF4081")) // Pink line
+                                    .width(10f)
+                                    .geodesic(true);
+                            mMap.addPolyline(polylineOptions);
+                        }
+                    });
+                }
+            });
+        }
+
+        // Determine which points to add markers for (Start, End, and max 3 intermediate points)
+        List<Integer> markerIndices = new ArrayList<>();
+        if (pathPoints.size() > 0) markerIndices.add(0);
+        if (pathPoints.size() > 1) markerIndices.add(pathPoints.size() - 1);
+        
+        int maxIntermediateMarkers = 3;
+        if (pathPoints.size() > 2) {
+            int step = Math.max(1, pathPoints.size() / (maxIntermediateMarkers + 1));
+            for (int i = step; i < pathPoints.size() - 1 && markerIndices.size() < maxIntermediateMarkers + 2; i += step) {
+                if (!markerIndices.contains(i)) {
+                    markerIndices.add(i);
+                }
+            }
+        }
+
+        // Add Markers asynchronously to avoid blocking UI
+        for (int i : markerIndices) {
             final LatLng pt = pathPoints.get(i);
             final LocationHistoryModel model = locations.get(i);
             final boolean isStart = (i == 0);
@@ -240,13 +312,15 @@ public class LocationHistoryActivity extends AppCompatActivity implements OnMapR
                     
                     String timeStr = new java.text.SimpleDateFormat("hh:mm a", java.util.Locale.getDefault()).format(new java.util.Date(model.getTimestamp()));
                     
-                    com.google.android.gms.maps.model.Marker marker = mMap.addMarker(new MarkerOptions()
-                            .position(pt)
-                            .title(timeStr)
-                            .snippet(placeName)
-                            .icon(BitmapDescriptorFactory.defaultMarker(markerColor)));
-                    if (marker != null) {
-                        mapMarkers.add(marker);
+                    if (mMap != null) {
+                        com.google.android.gms.maps.model.Marker marker = mMap.addMarker(new MarkerOptions()
+                                .position(pt)
+                                .title(timeStr + (isStart ? " (Start)" : (isEnd ? " (End)" : "")))
+                                .snippet(placeName)
+                                .icon(BitmapDescriptorFactory.defaultMarker(markerColor)));
+                        if (marker != null) {
+                            mapMarkers.add(marker);
+                        }
                     }
                 });
             });
@@ -286,9 +360,41 @@ public class LocationHistoryActivity extends AppCompatActivity implements OnMapR
                     return result;
                 }
             }
-        } catch (IOException e) {
+        } catch (java.io.IOException e) {
             e.printStackTrace();
         }
         return "Dropped Pin";
+    }
+
+    private List<LatLng> decodePolyline(String encoded) {
+        List<LatLng> poly = new ArrayList<>();
+        int index = 0, len = encoded.length();
+        int lat = 0, lng = 0;
+
+        while (index < len) {
+            int b, shift = 0, result = 0;
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+
+            LatLng p = new LatLng((((double) lat / 1E5)),
+                    (((double) lng / 1E5)));
+            poly.add(p);
+        }
+        return poly;
     }
 }

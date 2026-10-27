@@ -371,7 +371,7 @@ public class FeedActivity extends AppCompatActivity {
         String postId = postsRef.push().getKey();
         if (postId == null) return;
 
-        FeedPost newPost = new FeedPost(postId, currentUserId, currentUserName, imageUrl, caption, location, System.currentTimeMillis());
+        FeedPost newPost = new FeedPost(postId, currentUserId, currentUserName, imageUrl, caption, location, System.currentTimeMillis(), "image");
         postsRef.child(postId).setValue(newPost).addOnCompleteListener(task -> {
             runOnUiThread(() -> {
                 if (task.isSuccessful()) {

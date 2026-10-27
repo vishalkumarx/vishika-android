@@ -1,0 +1,29 @@
+@@ -2512,6 +2512,8 @@
+         
+         webviewCulturePreview.getSettings().setJavaScriptEnabled(true);
++        webviewCulturePreview.getSettings().setDomStorageEnabled(true);
++        webviewCulturePreview.getSettings().setMediaPlaybackRequiresUserGesture(false);
+         webviewCulturePreview.setWebChromeClient(new android.webkit.WebChromeClient());
+         
+         final boolean[] isViewingMine = {false};
+--- app/src/main/java/com/example/vishika/CultureActivity.java
++++ app/src/main/java/com/example/vishika/CultureActivity.java
+@@ -125,6 +125,8 @@
+     private void setupWebView() {
+         webviewCulture.getSettings().setJavaScriptEnabled(true);
++        webviewCulture.getSettings().setDomStorageEnabled(true);
++        webviewCulture.getSettings().setMediaPlaybackRequiresUserGesture(false);
+         webviewCulture.getSettings().setPluginState(android.webkit.WebSettings.PluginState.ON);
+         webviewCulture.setWebChromeClient(new android.webkit.WebChromeClient());
+     }
+--- app/src/main/java/com/example/vishika/FeedAdapter.java
++++ app/src/main/java/com/example/vishika/FeedAdapter.java
+@@ -75,6 +75,8 @@
+             holder.ivPostImage.setVisibility(View.GONE);
+             holder.wvPostVideo.setVisibility(View.VISIBLE);
+             holder.wvPostVideo.getSettings().setJavaScriptEnabled(true);
++            holder.wvPostVideo.getSettings().setDomStorageEnabled(true);
++            holder.wvPostVideo.getSettings().setMediaPlaybackRequiresUserGesture(false);
+             holder.wvPostVideo.setWebChromeClient(new android.webkit.WebChromeClient());
+             String videoId = extractYoutubeId(post.imageUrl);
+ 
