@@ -38,6 +38,17 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.Priority;
+import android.location.Location;
+import android.content.pm.PackageManager;
+import androidx.core.content.ContextCompat;
+import android.Manifest;
+
 import java.util.Random;
 
 public class MoodService extends Service {
@@ -48,6 +59,12 @@ public class MoodService extends Service {
     public static MoodService getInstance() {
         return instance;
     }
+    
+    private FusedLocationProviderClient fusedLocationClient;
+    private LocationCallback locationCallback;
+    private double lastHistoryLat = 0;
+    private double lastHistoryLng = 0;
+    private long lastHistoryTime = 0;
     
     private WindowManager windowManager;
     private DatabaseReference mDatabase;
@@ -101,10 +118,24 @@ public class MoodService extends Service {
                 .build();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(1, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            int serviceType = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE;
+            if (hasLocationPermission()) {
+                serviceType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION;
+            }
+            try {
+                startForeground(1, notification, serviceType);
+            } catch (Exception e) {
+                // Fallback if Android 14+ rejects FGS location type from background without background permission
+                try {
+                    startForeground(1, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+                } catch (Exception ignored) {}
+            }
         } else {
             startForeground(1, notification);
         }
+
+        startLocationTracking();
+        listenForLocationRefreshRequests();
 
         // Track online status robustly using .info/connected
         DatabaseReference connectedRef = FirebaseDatabase.getInstance().getReference(".info/connected");
@@ -192,6 +223,7 @@ public class MoodService extends Service {
         listenForUpdates();
         listenForPartnerOnlineStatus();
         listenForSurpriseBox();
+        listenForVibrations();
         
         setDrawingOverlayVisible(true);
 
@@ -1296,6 +1328,8 @@ public class MoodService extends Service {
     public void onDestroy() {
         super.onDestroy();
         instance = null;
+        stopLocationTracking();
+        dismissHeartbeatOverlay();
         if (moodListener != null) {
             mDatabase.child(myDbNode).removeEventListener(moodListener);
         }
@@ -1377,6 +1411,471 @@ public class MoodService extends Service {
             });
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    private Location previousPublishedLocation = null;
+    private long previousPublishedTime = 0;
+    private boolean isHighFrequencyWatchActive = false;
+    private final Handler liveWatchExpiryHandler = new Handler(Looper.getMainLooper());
+    private final Runnable disableHighFrequencyRunnable = () -> {
+        if (isHighFrequencyWatchActive) {
+            isHighFrequencyWatchActive = false;
+            applyLocationRequestInterval();
+        }
+    };
+
+    private boolean hasLocationPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private int getBatteryPercentage() {
+        try {
+            android.os.BatteryManager bm = (android.os.BatteryManager) getSystemService(Context.BATTERY_SERVICE);
+            if (bm != null) {
+                int level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
+                if (level >= 0 && level <= 100) return level;
+            }
+        } catch (Exception ignored) {}
+        return -1;
+    }
+
+    private boolean isBatteryCharging() {
+        try {
+            android.os.BatteryManager bm = (android.os.BatteryManager) getSystemService(Context.BATTERY_SERVICE);
+            if (bm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                return bm.isCharging();
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private void publishLocation(Location location) {
+        if (location == null) return;
+        double lat = location.getLatitude();
+        double lng = location.getLongitude();
+        if (lat == 0.0 && lng == 0.0) return;
+
+        long timestamp = System.currentTimeMillis();
+        boolean vishal = com.example.vishika.MainActivity.IS_VISHAL;
+        String locNode = vishal ? "locations/vishal" : "locations/rashika";
+        DatabaseReference db = FirebaseDatabase.getInstance().getReference();
+
+        float speedMps = location.hasSpeed() ? location.getSpeed() : 0f;
+        float bearing = location.hasBearing() ? location.getBearing() : 0f;
+        float accuracy = location.hasAccuracy() ? location.getAccuracy() : 15f;
+
+        if (previousPublishedLocation != null && previousPublishedTime > 0) {
+            long dtMs = timestamp - previousPublishedTime;
+            float distMeters = previousPublishedLocation.distanceTo(location);
+            if (!location.hasSpeed() && dtMs >= 1500 && dtMs <= 60000) {
+                // Only infer speed if moved more than GPS accuracy jitter (at least 6m)
+                if (distMeters > Math.max(6.0f, accuracy * 0.6f)) {
+                    speedMps = distMeters / (dtMs / 1000f);
+                }
+            }
+            if (!location.hasBearing() && distMeters > 4.0f) {
+                bearing = previousPublishedLocation.bearingTo(location);
+                if (bearing < 0) bearing += 360f;
+            }
+        }
+        previousPublishedLocation = location;
+        previousPublishedTime = timestamp;
+
+        java.util.Map<String, Object> currentLocData = new java.util.HashMap<>();
+        currentLocData.put("lat", lat);
+        currentLocData.put("lng", lng);
+        currentLocData.put("timestamp", timestamp);
+        currentLocData.put("speed", (double) speedMps);
+        currentLocData.put("bearing", (double) bearing);
+        currentLocData.put("accuracy", (double) accuracy);
+        int battery = getBatteryPercentage();
+        if (battery >= 0) {
+            currentLocData.put("battery", battery);
+            currentLocData.put("charging", isBatteryCharging());
+        }
+        db.child(locNode).updateChildren(currentLocData);
+
+        // Filter stationary jitter from bloating location history
+        boolean shouldRecordHistory = false;
+        if (lastHistoryLat == 0 && lastHistoryLng == 0) {
+            shouldRecordHistory = true;
+        } else {
+            float[] dist = new float[1];
+            Location.distanceBetween(lastHistoryLat, lastHistoryLng, lat, lng, dist);
+            // Record only if moved at least 25 meters, or at least 30 minutes have passed
+            if (dist[0] >= 25.0f || (timestamp - lastHistoryTime >= 30 * 60 * 1000L)) {
+                shouldRecordHistory = true;
+            }
+        }
+
+        if (shouldRecordHistory) {
+            lastHistoryLat = lat;
+            lastHistoryLng = lng;
+            lastHistoryTime = timestamp;
+
+            String historyNode = vishal ? "location_history/vishal" : "location_history/rashika";
+            java.util.Map<String, Object> locData = new java.util.HashMap<>();
+            locData.put("lat", lat);
+            locData.put("lng", lng);
+            locData.put("timestamp", timestamp);
+            db.child(historyNode).push().setValue(locData);
+        }
+    }
+
+    public void requestImmediateLocationUpdate() {
+        if (!hasLocationPermission()) return;
+        if (fusedLocationClient == null) {
+            fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        }
+        try {
+            fusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
+                if (location != null) {
+                    publishLocation(location);
+                }
+            });
+            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                    .addOnSuccessListener(location -> {
+                        if (location != null) {
+                            publishLocation(location);
+                        } else {
+                            try {
+                                fusedLocationClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
+                                        .addOnSuccessListener(this::publishLocation);
+                            } catch (SecurityException ignored) {}
+                        }
+                    });
+        } catch (SecurityException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void applyLocationRequestInterval() {
+        if (!hasLocationPermission() || fusedLocationClient == null || locationCallback == null) return;
+
+        long intervalMs = isHighFrequencyWatchActive ? 2500L : 15000L;
+        long minIntervalMs = isHighFrequencyWatchActive ? 1500L : 5000L;
+
+        LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalMs)
+                .setMinUpdateIntervalMillis(minIntervalMs)
+                .setMinUpdateDistanceMeters(0)
+                .setWaitForAccurateLocation(false)
+                .build();
+
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback);
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
+        } catch (SecurityException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void startLocationTracking() {
+        if (!hasLocationPermission()) {
+            return;
+        }
+
+        if (fusedLocationClient == null) {
+            fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        }
+
+        requestImmediateLocationUpdate();
+
+        if (locationCallback == null) {
+            locationCallback = new LocationCallback() {
+                @Override
+                public void onLocationResult(@NonNull LocationResult locationResult) {
+                    for (Location location : locationResult.getLocations()) {
+                        publishLocation(location);
+                    }
+                }
+            };
+        }
+
+        applyLocationRequestInterval();
+    }
+
+    private boolean isLocationRefreshListenerRegistered = false;
+
+    private void listenForLocationRefreshRequests() {
+        if (isLocationRefreshListenerRegistered) return;
+        isLocationRefreshListenerRegistered = true;
+
+        String myName = isVishal ? "vishal" : "rashika";
+        FirebaseDatabase.getInstance().getReference("location_requests").child(myName)
+                .addValueEventListener(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        if (snapshot.exists()) {
+                            snapshot.getRef().removeValue();
+                            startLocationTracking();
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {}
+                });
+
+        // Listen for High-Frequency "Live Watch" mode (Swiggy/Zomato style 2.5s updates while partner watches map)
+        FirebaseDatabase.getInstance().getReference("live_watch").child(myName)
+                .addValueEventListener(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        liveWatchExpiryHandler.removeCallbacks(disableHighFrequencyRunnable);
+                        Long expiresAt = snapshot.getValue(Long.class);
+                        long now = System.currentTimeMillis();
+                        if (expiresAt != null && expiresAt > now) {
+                            boolean wasActive = isHighFrequencyWatchActive;
+                            isHighFrequencyWatchActive = true;
+                            if (!wasActive) {
+                                applyLocationRequestInterval();
+                            }
+                            requestImmediateLocationUpdate();
+                            liveWatchExpiryHandler.postDelayed(disableHighFrequencyRunnable, expiresAt - now + 1000L);
+                        } else if (isHighFrequencyWatchActive) {
+                            isHighFrequencyWatchActive = false;
+                            applyLocationRequestInterval();
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {}
+                });
+    }
+
+    private void stopLocationTracking() {
+        if (fusedLocationClient != null && locationCallback != null) {
+            try {
+                fusedLocationClient.removeLocationUpdates(locationCallback);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private boolean isVibrationListenerRegistered = false;
+    private long lastReceivedVibrationTime = 0;
+
+    private void listenForVibrations() {
+        if (isVibrationListenerRegistered) return;
+        isVibrationListenerRegistered = true;
+
+        String myName = isVishal ? "vishal" : "rashika";
+        FirebaseDatabase.getInstance().getReference("vibrations").child(myName)
+                .addValueEventListener(new com.google.firebase.database.ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        if (snapshot.exists()) {
+                            Long timestamp = snapshot.child("timestamp").getValue(Long.class);
+                            String pattern = snapshot.child("pattern").getValue(String.class);
+                            if (timestamp != null && timestamp > serviceStartTime && timestamp > lastReceivedVibrationTime) {
+                                lastReceivedVibrationTime = timestamp;
+                                triggerPartnerVibration(pattern);
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {}
+                });
+    }
+
+    private android.view.View heartbeatOverlayView = null;
+    private final android.os.Handler heartbeatOverlayHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable dismissHeartbeatOverlayRunnable = this::dismissHeartbeatOverlay;
+
+    private void triggerPartnerVibration(String pattern) {
+        try {
+            android.os.Vibrator vibrator = (android.os.Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            if (vibrator != null && vibrator.hasVibrator()) {
+                // Single heartbeat cycle per pulse: thump (80ms), brief rest (80ms), thump (120ms)
+                long[] timings = new long[]{0, 80, 80, 120};
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    int[] amplitudes = new int[]{0, 190, 0, 255};
+                    if (vibrator.hasAmplitudeControl()) {
+                        android.os.VibrationEffect effect = android.os.VibrationEffect.createWaveform(timings, amplitudes, -1);
+                        vibrator.vibrate(effect);
+                    } else {
+                        android.os.VibrationEffect effect = android.os.VibrationEffect.createWaveform(timings, -1);
+                        vibrator.vibrate(effect);
+                    }
+                } else {
+                    vibrator.vibrate(timings, -1);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        // Show floating heartbeat animation overlay over other apps
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(this::showHeartbeatOverlay);
+    }
+
+    private void showHeartbeatOverlay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !android.provider.Settings.canDrawOverlays(this)) {
+            return;
+        }
+
+        try {
+            // Wake screen briefly if off
+            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                android.os.PowerManager.WakeLock wl = pm.newWakeLock(
+                        android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+                                | android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP
+                                | android.os.PowerManager.ON_AFTER_RELEASE,
+                        "Vishika:HeartbeatWakeLock");
+                wl.acquire(3000);
+            }
+        } catch (Exception ignored) {}
+
+        try {
+            if (heartbeatOverlayView == null) {
+                int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                        ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                        : WindowManager.LayoutParams.TYPE_SYSTEM_ALERT;
+
+                int flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                        | WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                        | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON;
+
+                WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                        WindowManager.LayoutParams.WRAP_CONTENT,
+                        WindowManager.LayoutParams.WRAP_CONTENT,
+                        type,
+                        flags,
+                        PixelFormat.TRANSLUCENT
+                );
+                params.gravity = Gravity.CENTER;
+
+                float density = getResources().getDisplayMetrics().density;
+                int frameSize = (int) (140 * density);
+
+                android.widget.FrameLayout container = new android.widget.FrameLayout(this);
+                container.setLayoutParams(new android.view.ViewGroup.LayoutParams(frameSize, frameSize));
+
+                // Expanding glow/ripple view
+                android.view.View rippleView = new android.view.View(this);
+                android.widget.FrameLayout.LayoutParams rippleParams = new android.widget.FrameLayout.LayoutParams(frameSize, frameSize);
+                rippleParams.gravity = Gravity.CENTER;
+                rippleView.setLayoutParams(rippleParams);
+                rippleView.setBackgroundResource(R.drawable.bg_touch_vibe_ripple);
+                rippleView.setId(android.view.View.generateViewId());
+                rippleView.setTag("ripple");
+                container.addView(rippleView);
+
+                // Circular pink button backing
+                int btnSize = (int) (96 * density);
+                android.widget.FrameLayout buttonView = new android.widget.FrameLayout(this);
+                android.widget.FrameLayout.LayoutParams btnParams = new android.widget.FrameLayout.LayoutParams(btnSize, btnSize);
+                btnParams.gravity = Gravity.CENTER;
+                buttonView.setLayoutParams(btnParams);
+                buttonView.setBackgroundResource(R.drawable.bg_touch_vibe_button);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    buttonView.setElevation(16f * density);
+                }
+                buttonView.setTag("button");
+
+                // Beating Heart icon
+                int iconSize = (int) (48 * density);
+                android.widget.ImageView heartIcon = new android.widget.ImageView(this);
+                android.widget.FrameLayout.LayoutParams iconParams = new android.widget.FrameLayout.LayoutParams(iconSize, iconSize);
+                iconParams.gravity = Gravity.CENTER;
+                heartIcon.setLayoutParams(iconParams);
+                heartIcon.setImageResource(R.drawable.ic_heart_filled);
+                heartIcon.setColorFilter(android.graphics.Color.WHITE);
+                heartIcon.setTag("heart");
+                buttonView.addView(heartIcon);
+
+                container.addView(buttonView);
+                heartbeatOverlayView = container;
+                windowManager.addView(heartbeatOverlayView, params);
+            }
+
+            // Pulse the views
+            android.view.View ripple = heartbeatOverlayView.findViewWithTag("ripple");
+            android.view.View button = heartbeatOverlayView.findViewWithTag("button");
+            android.view.View heart = heartbeatOverlayView.findViewWithTag("heart");
+
+            if (ripple != null) {
+                ripple.animate().cancel();
+                ripple.setScaleX(0.85f);
+                ripple.setScaleY(0.85f);
+                ripple.setAlpha(0.9f);
+                ripple.setVisibility(View.VISIBLE);
+                ripple.animate()
+                        .scaleX(1.6f)
+                        .scaleY(1.6f)
+                        .alpha(0f)
+                        .setDuration(600)
+                        .start();
+            }
+
+            if (button != null) {
+                button.animate().cancel();
+                button.setScaleX(0.92f);
+                button.setScaleY(0.92f);
+                button.animate()
+                        .scaleX(1.15f)
+                        .scaleY(1.15f)
+                        .setDuration(220)
+                        .withEndAction(() -> {
+                            if (button != null) {
+                                button.animate().scaleX(1.0f).scaleY(1.0f).setDuration(200).start();
+                            }
+                        })
+                        .start();
+            }
+
+            if (heart != null) {
+                heart.animate().cancel();
+                heart.setScaleX(1.4f);
+                heart.setScaleY(1.4f);
+                heart.animate()
+                        .scaleX(1.0f)
+                        .scaleY(1.0f)
+                        .setDuration(350)
+                        .setInterpolator(new android.view.animation.OvershootInterpolator(2.2f))
+                        .start();
+            }
+
+            // Reset dismiss timer (stay on screen while pulses arrive, dismiss 2 seconds after last pulse)
+            heartbeatOverlayHandler.removeCallbacks(dismissHeartbeatOverlayRunnable);
+            heartbeatOverlayHandler.postDelayed(dismissHeartbeatOverlayRunnable, 2000);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void dismissHeartbeatOverlay() {
+        if (heartbeatOverlayView != null) {
+            try {
+                heartbeatOverlayView.animate().cancel();
+                heartbeatOverlayView.animate()
+                        .scaleX(0.6f)
+                        .scaleY(0.6f)
+                        .alpha(0f)
+                        .setDuration(250)
+                        .withEndAction(() -> {
+                            if (heartbeatOverlayView != null) {
+                                try {
+                                    windowManager.removeView(heartbeatOverlayView);
+                                } catch (Exception ignored) {}
+                                heartbeatOverlayView = null;
+                            }
+                        })
+                        .start();
+            } catch (Exception e) {
+                try {
+                    windowManager.removeView(heartbeatOverlayView);
+                } catch (Exception ignored) {}
+                heartbeatOverlayView = null;
+            }
         }
     }
 

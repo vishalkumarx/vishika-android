@@ -4,10 +4,12 @@
 
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -66,6 +68,12 @@
             android:theme="@style/Theme.StoryViewer" />
 
         <activity
+            android:name=".StoryCropActivity"
+            android:exported="false"
+            android:theme="@style/Theme.AppCompat.NoActionBar"
+            android:screenOrientation="portrait" />
+
+        <activity
             android:name=".ChatActivity"
             android:exported="false"
             android:label="Chat" />
@@ -95,6 +103,11 @@
             android:name=".LocationHistoryActivity"
             android:exported="false"
             android:label="Location History" />
+
+        <activity
+            android:name=".LiveTrackingActivity"
+            android:exported="false"
+            android:label="Live Tracking" />
             
         <activity
             android:name=".CultureActivity"
@@ -104,7 +117,7 @@
             
         <service
             android:name=".MoodService"
-            android:foregroundServiceType="specialUse"
+            android:foregroundServiceType="specialUse|location"
             android:exported="false">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="mood_rain_animation"/>
         </service>

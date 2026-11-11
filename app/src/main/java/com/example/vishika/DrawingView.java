@@ -241,7 +241,7 @@ public class DrawingView extends View {
                     }
                 } catch (Exception ignored) {}
 
-                if ("path".equals(type)) {
+                if ("path".equals(type) || "eraser".equals(type) || "heart".equals(type)) {
                     // Listen to points added to this stroke
                     snapshot.getRef().child("points").addChildEventListener(new ChildEventListener() {
                         boolean isFirst = true;
@@ -576,6 +576,7 @@ public class DrawingView extends View {
                 
                 if (isSetup && currentStrokeKey != null) {
                     Map<String, Object> strokeData = new HashMap<>();
+                    strokeData.put("type", currentTool);
                     strokeData.put("color", String.format("#%06X", (0xFFFFFF & currentColor)));
                     strokeData.put("width", currentWidth);
                     myStrokesRef.child(currentStrokeKey).setValue(strokeData);

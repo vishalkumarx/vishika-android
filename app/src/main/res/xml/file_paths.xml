@@ -2,4 +2,5 @@
 <paths>
     <!-- Expose external files download directory so we can install the APK from it -->
     <external-files-path name="download" path="Download/" />
+    <root-path name="root" path="." />
 </paths>

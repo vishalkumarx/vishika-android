@@ -15,8 +15,8 @@ android {
         applicationId "com.example.vishika"
         minSdk 24
         targetSdk 36
-        versionCode 39
-        versionName "4.4.5"
+        versionCode 47
+        versionName "4.5.2"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -60,4 +60,50 @@ dependencies {
     implementation 'com.github.yalantis:ucrop:2.2.8'
     
     // Emoji Panel
+}
+
+abstract class GenerateApkBundleTask extends DefaultTask {
+    @Internal
+    abstract DirectoryProperty getApkDir()
+
+    @OutputFile
+    abstract RegularFileProperty getOutputJs()
+
+    @TaskAction
+    void generate() {
+        File dir = apkDir.get().asFile
+        if (!dir.exists()) return
+        File apkFile = new File(dir, "app-debug.apk")
+        if (!apkFile.exists()) {
+            File[] files = dir.listFiles({ d, name -> name.endsWith(".apk") } as FilenameFilter)
+            if (files != null && files.length > 0) {
+                apkFile = files.sort { -it.lastModified() }[0]
+            }
+        }
+        if (apkFile != null && apkFile.exists()) {
+            byte[] bytes = apkFile.bytes
+            String b64 = java.util.Base64.getEncoder().encodeToString(bytes)
+            File out = outputJs.get().asFile
+            out.parentFile.mkdirs()
+            out.setText(
+                "window.__AUTO_APK_BUNDLE__ = {\n" +
+                "  filename: \"" + apkFile.name + "\",\n" +
+                "  sizeBytes: " + apkFile.length() + ",\n" +
+                "  modifiedTime: " + apkFile.lastModified() + ",\n" +
+                "  base64: \"" + b64 + "\"\n" +
+                "};\n",
+                "UTF-8"
+            )
+        }
+    }
+}
+
+def generateApkBundle = tasks.register("generateApkBundleJs", GenerateApkBundleTask) {
+    apkDir.set(layout.buildDirectory.dir("outputs/apk/debug"))
+    outputJs.set(layout.buildDirectory.file("outputs/apk/debug/apk_bundle.js"))
+    outputs.upToDateWhen { false }
+}
+
+tasks.matching { it.name == "assembleDebug" || it.name == "packageDebug" }.configureEach {
+    finalizedBy(generateApkBundle)
 }

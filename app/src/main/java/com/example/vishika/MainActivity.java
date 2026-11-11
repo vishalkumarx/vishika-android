@@ -92,7 +92,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final int OVERLAY_PERMISSION_REQUEST_CODE = 2;
-    public static final boolean IS_VISHAL = true    ;
+    public static final boolean IS_VISHAL = false    ;
     
     private String myDbNode;
     private String partnerDbNode;
@@ -112,6 +112,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private double partnerLat;
     private double partnerLng;
     private long partnerTimestamp = 0;
+    private double lastHistoryLat = 0;
+    private double lastHistoryLng = 0;
+    private long lastReceivedVibTime = System.currentTimeMillis();
+    private ValueEventListener vibrationListener;
+    private DatabaseReference vibrationRef;
+    private long lastHistoryTime = 0;
 
     // Locket (Daily Photo)
     private ActivityResultLauncher<String> locketImagePickerLauncher;
@@ -148,6 +154,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private ActivityResultLauncher<Intent> updateApkPickerLauncher;
     private ActivityResultLauncher<Intent> surpriseMediaPickerLauncher;
     private ActivityResultLauncher<Intent> storyMediaPickerLauncher;
+    private ActivityResultLauncher<Intent> storyCropImageLauncher;
     private ActivityResultLauncher<Intent> extractAudioPickerLauncher;
     private String pendingSurpriseType;
     private boolean isPartnerOnline = false;
@@ -358,7 +365,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         
         androidx.swiperefreshlayout.widget.SwipeRefreshLayout swipeRefreshDashboard = findViewById(R.id.swipeRefreshDashboard);
         swipeRefreshDashboard.setOnRefreshListener(() -> {
-            new android.os.Handler().postDelayed(() -> {
+            refreshLocations();
+            new android.os.Handler(Looper.getMainLooper()).postDelayed(() -> {
                 swipeRefreshDashboard.setRefreshing(false);
             }, 1000);
         });
@@ -392,8 +400,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         });
         
         btnRefreshMap.setOnClickListener(v -> {
-            Toast.makeText(this, "Updating map...", Toast.LENGTH_SHORT).show();
-            updateDistanceUI();
+            Toast.makeText(this, "Refreshing location...", Toast.LENGTH_SHORT).show();
+            refreshLocations();
         });
         
         btnRefreshMap.setOnLongClickListener(v -> {
@@ -405,6 +413,20 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (btnLocationHistory != null) {
             btnLocationHistory.setOnClickListener(v -> {
                 startActivity(new Intent(MainActivity.this, LocationHistoryActivity.class));
+            });
+        }
+
+        android.view.View btnLiveTrackBadge = findViewById(R.id.btnLiveTrackBadge);
+        if (btnLiveTrackBadge != null) {
+            btnLiveTrackBadge.setOnClickListener(v -> {
+                startActivity(new Intent(MainActivity.this, LiveTrackingActivity.class));
+            });
+        }
+
+        android.view.View distanceOverlay = findViewById(R.id.distanceOverlay);
+        if (distanceOverlay != null) {
+            distanceOverlay.setOnClickListener(v -> {
+                startActivity(new Intent(MainActivity.this, LiveTrackingActivity.class));
             });
         }
         
@@ -427,13 +449,31 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 }
         );
         
+        storyCropImageLauncher = registerForActivityResult(
+                new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        android.net.Uri croppedUri = result.getData().getParcelableExtra(StoryCropActivity.EXTRA_CROPPED_URI);
+                        if (croppedUri != null) {
+                            uploadSurpriseMediaToCloudinary(croppedUri, "Story");
+                        }
+                    }
+                }
+        );
+
         storyMediaPickerLauncher = registerForActivityResult(
                 new androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == RESULT_OK && result.getData() != null) {
                         android.net.Uri uri = result.getData().getData();
                         if (uri != null) {
-                            uploadSurpriseMediaToCloudinary(uri, "Story");
+                            if ("Photo".equals(pendingSurpriseType)) {
+                                Intent cropIntent = new Intent(MainActivity.this, StoryCropActivity.class);
+                                cropIntent.putExtra(StoryCropActivity.EXTRA_IMAGE_URI, uri);
+                                storyCropImageLauncher.launch(cropIntent);
+                            } else {
+                                uploadSurpriseMediaToCloudinary(uri, "Story");
+                            }
                         }
                     }
                 }
@@ -465,15 +505,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         android.widget.ImageView appLogo = findViewById(R.id.appLogo);
         if (appLogo != null) {
-            appLogo.setOnLongClickListener(v -> {
-                if (IS_VISHAL) {
-                    Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-                    intent.setType("application/vnd.android.package-archive");
-                    updateApkPickerLauncher.launch(intent);
-                    return true;
-                }
-                return false;
-            });
+            appLogo.setOnLongClickListener(null);
+            appLogo.setLongClickable(false);
         }
 
         database = FirebaseDatabase.getInstance().getReference();
@@ -524,6 +557,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         setupCulturePreview();
 
         setupMoodListeners();
+        setupHeartbeatTouchListener();
         setupSoundListeners();
         setupOnlineStatusListener();
 
@@ -720,15 +754,76 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     public void onMapReady(@NonNull GoogleMap googleMap) {
         mMap = googleMap;
-        mMap.getUiSettings().setAllGesturesEnabled(false); // Make it look like a static widget widget
+        mMap.getUiSettings().setAllGesturesEnabled(false); // Make it look like a static widget
         mMap.getUiSettings().setZoomControlsEnabled(false);
+        mMap.setOnMapClickListener(latLng -> {
+            startActivity(new Intent(MainActivity.this, LiveTrackingActivity.class));
+        });
+        mMap.setOnMarkerClickListener(marker -> {
+            startActivity(new Intent(MainActivity.this, LiveTrackingActivity.class));
+            return true;
+        });
         updateMapUI();
+    }
+
+    private String cachedPartnerAddress = null;
+    private double lastGeocodedPartnerLat = 0;
+    private double lastGeocodedPartnerLng = 0;
+    private float partnerSpeedMps = 0f;
+    private float partnerAccuracy = 15f;
+    private int partnerBattery = -1;
+    private boolean partnerCharging = false;
+    private android.animation.ValueAnimator homeMarkerAnimator;
+    private com.google.android.gms.maps.model.Circle homeAccuracyCircle;
+    private final List<LatLng> homeTrailPoints = new java.util.ArrayList<>();
+    private Location prevMyLocation = null;
+    private long prevMyLocationTime = 0;
+
+    private final android.os.Handler liveWatchHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable homeLiveWatchRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (database != null) {
+                String partnerNameNode = IS_VISHAL ? "rashika" : "vishal";
+                DatabaseReference watchRef = database.child("live_watch").child(partnerNameNode);
+                watchRef.onDisconnect().removeValue();
+                watchRef.setValue(System.currentTimeMillis() + 25000L);
+            }
+            liveWatchHandler.postDelayed(this, 10000L);
+        }
+    };
+
+    private int getMyBatteryPercentage() {
+        try {
+            android.os.BatteryManager bm = (android.os.BatteryManager) getSystemService(Context.BATTERY_SERVICE);
+            if (bm != null) {
+                int level = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
+                if (level >= 0 && level <= 100) return level;
+            }
+        } catch (Exception ignored) {}
+        return -1;
+    }
+
+    private boolean isMyBatteryCharging() {
+        try {
+            android.os.BatteryManager bm = (android.os.BatteryManager) getSystemService(Context.BATTERY_SERVICE);
+            if (bm != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                return bm.isCharging();
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private boolean hasLocationPermission() {
+        return ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
     }
 
     private void checkPermissionsAndStart() {
         java.util.List<String> permissionsToRequest = new java.util.ArrayList<>();
-        if (androidx.core.app.ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (!hasLocationPermission()) {
             permissionsToRequest.add(android.Manifest.permission.ACCESS_FINE_LOCATION);
+            permissionsToRequest.add(android.Manifest.permission.ACCESS_COARSE_LOCATION);
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             if (androidx.core.app.ActivityCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -740,65 +835,224 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             androidx.core.app.ActivityCompat.requestPermissions(this, permissionsToRequest.toArray(new String[0]), LOCATION_PERMISSION_REQUEST_CODE);
         } else {
             startLocationUpdates();
+            checkBackgroundLocationPermission();
+        }
+    }
+
+    private void checkBackgroundLocationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            if (androidx.core.app.ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                androidx.core.app.ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.ACCESS_BACKGROUND_LOCATION}, 102);
+            }
+        }
+    }
+
+    private void handleMyLocationUpdate(Location location) {
+        if (location == null) return;
+        double lat = location.getLatitude();
+        double lng = location.getLongitude();
+        if (lat == 0.0 && lng == 0.0) return;
+
+        myLat = lat;
+        myLng = lng;
+
+        long timestamp = System.currentTimeMillis();
+        float speedMps = location.hasSpeed() ? location.getSpeed() : 0f;
+        float bearing = location.hasBearing() ? location.getBearing() : 0f;
+        float accuracy = location.hasAccuracy() ? location.getAccuracy() : 15f;
+
+        if (prevMyLocation != null && prevMyLocationTime > 0) {
+            long dtMs = timestamp - prevMyLocationTime;
+            float distMeters = prevMyLocation.distanceTo(location);
+            if (!location.hasSpeed() && dtMs >= 1500 && dtMs <= 60000) {
+                if (distMeters > Math.max(6.0f, accuracy * 0.6f)) {
+                    speedMps = distMeters / (dtMs / 1000f);
+                }
+            }
+            if (!location.hasBearing() && distMeters > 4.0f) {
+                bearing = prevMyLocation.bearingTo(location);
+                if (bearing < 0) bearing += 360f;
+            }
+        }
+        prevMyLocation = location;
+        prevMyLocationTime = timestamp;
+
+        java.util.Map<String, Object> currentLocData = new java.util.HashMap<>();
+        currentLocData.put("lat", myLat);
+        currentLocData.put("lng", myLng);
+        currentLocData.put("timestamp", timestamp);
+        currentLocData.put("speed", (double) speedMps);
+        currentLocData.put("bearing", (double) bearing);
+        currentLocData.put("accuracy", (double) accuracy);
+        int batt = getMyBatteryPercentage();
+        if (batt >= 0) {
+            currentLocData.put("battery", batt);
+            currentLocData.put("charging", isMyBatteryCharging());
+        }
+        database.child(myDbNode).updateChildren(currentLocData);
+
+        // Filter stationary jitter from bloating location history
+        boolean shouldRecordHistory = false;
+        if (lastHistoryLat == 0 && lastHistoryLng == 0) {
+            shouldRecordHistory = true;
+        } else {
+            float[] dist = new float[1];
+            Location.distanceBetween(lastHistoryLat, lastHistoryLng, myLat, myLng, dist);
+            if (dist[0] >= 25.0f || (timestamp - lastHistoryTime >= 30 * 60 * 1000L)) {
+                shouldRecordHistory = true;
+            }
+        }
+
+        if (shouldRecordHistory) {
+            lastHistoryLat = myLat;
+            lastHistoryLng = myLng;
+            lastHistoryTime = timestamp;
+
+            String historyNode = IS_VISHAL ? "location_history/vishal" : "location_history/rashika";
+            java.util.Map<String, Object> locData = new java.util.HashMap<>();
+            locData.put("lat", myLat);
+            locData.put("lng", myLng);
+            locData.put("timestamp", timestamp);
+            database.child(historyNode).push().setValue(locData);
+        }
+
+        updateDistanceUI();
+    }
+
+    private void requestImmediateLocationFix() {
+        if (!hasLocationPermission()) return;
+        try {
+            fusedLocationClient.getLastLocation().addOnSuccessListener(location -> {
+                if (location != null) {
+                    handleMyLocationUpdate(location);
+                }
+            });
+            fusedLocationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                    .addOnSuccessListener(location -> {
+                        if (location != null) {
+                            handleMyLocationUpdate(location);
+                        } else {
+                            try {
+                                fusedLocationClient.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, null)
+                                        .addOnSuccessListener(this::handleMyLocationUpdate);
+                            } catch (SecurityException ignored) {}
+                        }
+                    });
+        } catch (SecurityException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void refreshLocations() {
+        requestImmediateLocationFix();
+        if (MoodService.getInstance() != null) {
+            MoodService.getInstance().startLocationTracking();
+        }
+        String partnerNameNode = IS_VISHAL ? "rashika" : "vishal";
+        database.child("location_requests").child(partnerNameNode).setValue(System.currentTimeMillis());
+        database.child(partnerDbNode).get().addOnSuccessListener(this::applyPartnerLocationSnapshot);
+    }
+
+    private void applyPartnerLocationSnapshot(DataSnapshot snapshot) {
+        if (snapshot != null && snapshot.exists()) {
+            Double lat = snapshot.child("lat").getValue(Double.class);
+            Double lng = snapshot.child("lng").getValue(Double.class);
+            Long ts = snapshot.child("timestamp").getValue(Long.class);
+            Double speed = snapshot.child("speed").getValue(Double.class);
+            Double acc = snapshot.child("accuracy").getValue(Double.class);
+            Integer batt = snapshot.child("battery").getValue(Integer.class);
+            Boolean charging = snapshot.child("charging").getValue(Boolean.class);
+
+            if (lat != null && lng != null && (lat != 0.0 || lng != 0.0)) {
+                if (ts == null || ts >= partnerTimestamp) {
+                    if (ts != null) partnerTimestamp = ts;
+                    if (speed != null) partnerSpeedMps = speed.floatValue();
+                    if (acc != null) partnerAccuracy = acc.floatValue();
+                    if (batt != null) partnerBattery = batt;
+                    if (charging != null) partnerCharging = charging;
+
+                    partnerLat = lat;
+                    partnerLng = lng;
+
+                    LatLng newPt = new LatLng(partnerLat, partnerLng);
+                    if (homeTrailPoints.isEmpty()) {
+                        homeTrailPoints.add(newPt);
+                    } else {
+                        LatLng lastPt = homeTrailPoints.get(homeTrailPoints.size() - 1);
+                        float[] d = new float[1];
+                        Location.distanceBetween(lastPt.latitude, lastPt.longitude, newPt.latitude, newPt.longitude, d);
+                        if (d[0] >= 3.0f) {
+                            homeTrailPoints.add(newPt);
+                            if (homeTrailPoints.size() > 50) {
+                                homeTrailPoints.remove(0);
+                            }
+                        }
+                    }
+
+                    updateDistanceUI();
+                }
+            }
         }
     }
 
     private void startLocationUpdates() {
+        if (!hasLocationPermission()) return;
+
+        requestImmediateLocationFix();
+
         LocationRequest locationRequest = new LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000)
-                .setMinUpdateDistanceMeters(10) // Update every 10 meters
+                .setMinUpdateIntervalMillis(5000)
+                .setMinUpdateDistanceMeters(0)
+                .setWaitForAccurateLocation(false)
                 .build();
 
-        locationCallback = new LocationCallback() {
-            @Override
-            public void onLocationResult(@NonNull LocationResult locationResult) {
-                for (Location location : locationResult.getLocations()) {
-                    myLat = location.getLatitude();
-                    myLng = location.getLongitude();
-                    
-                    // Sync my location to Firebase
-                    database.child(myDbNode).child("lat").setValue(myLat);
-                    database.child(myDbNode).child("lng").setValue(myLng);
-                    long timestamp = System.currentTimeMillis();
-                    database.child(myDbNode).child("timestamp").setValue(timestamp);
-                    
-                    // Push to location history
-                    String historyNode = IS_VISHAL ? "location_history/vishal" : "location_history/rashika";
-                    java.util.Map<String, Object> locData = new java.util.HashMap<>();
-                    locData.put("lat", myLat);
-                    locData.put("lng", myLng);
-                    locData.put("timestamp", timestamp);
-                    database.child(historyNode).push().setValue(locData);
-                    
-                    updateDistanceUI();
+        if (locationCallback == null) {
+            locationCallback = new LocationCallback() {
+                @Override
+                public void onLocationResult(@NonNull LocationResult locationResult) {
+                    for (Location location : locationResult.getLocations()) {
+                        handleMyLocationUpdate(location);
+                    }
                 }
-            }
-        };
+            };
+        }
 
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+        try {
+            fusedLocationClient.removeLocationUpdates(locationCallback);
             fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, Looper.getMainLooper());
+        } catch (SecurityException e) {
+            e.printStackTrace();
         }
     }
 
     private void setupPartnerLocationListener() {
+        String partnerNameNode = IS_VISHAL ? "rashika" : "vishal";
+        database.child("location_requests").child(partnerNameNode).setValue(System.currentTimeMillis());
+
         database.child(partnerDbNode).addValueEventListener(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
-                if (snapshot.exists()) {
-                    Double lat = snapshot.child("lat").getValue(Double.class);
-                    Double lng = snapshot.child("lng").getValue(Double.class);
-                    Long ts = snapshot.child("timestamp").getValue(Long.class);
-                    if (ts != null) partnerTimestamp = ts;
-                    if (lat != null && lng != null) {
-                        partnerLat = lat;
-                        partnerLng = lng;
-                        updateDistanceUI();
-                    }
-                }
+                applyPartnerLocationSnapshot(snapshot);
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError error) {}
         });
+
+        // Also listen to the latest location_history entry in case history has a newer timestamp
+        database.child("location_history").child(partnerNameNode)
+                .orderByChild("timestamp").limitToLast(1)
+                .addValueEventListener(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        for (DataSnapshot child : snapshot.getChildren()) {
+                            applyPartnerLocationSnapshot(child);
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {}
+                });
     }
 
     private void setupPartnerProfileListener() {
@@ -867,7 +1121,41 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         float[] results = new float[1];
         Location.distanceBetween(myLat, myLng, partnerLat, partnerLng, results);
         int distanceInKm = Math.round(results[0] / 1000f);
-        textDistanceValue.setText("Distance apart: " + distanceInKm + " km");
+        if (results[0] < 1000f) {
+            textDistanceValue.setText("Distance apart: " + Math.round(results[0]) + " m");
+        } else {
+            textDistanceValue.setText(String.format(Locale.getDefault(), "Distance apart: %.1f km", results[0] / 1000f));
+        }
+
+        // Update live telemetry badges on home card (Speed/Activity, Battery, Accuracy)
+        TextView textLiveTelemetryBadges = findViewById(R.id.textLiveTelemetryBadges);
+        if (textLiveTelemetryBadges != null) {
+            float speedKmh = partnerSpeedMps * 3.6f;
+            long ageMs = System.currentTimeMillis() - partnerTimestamp;
+            boolean isFresh = partnerTimestamp > 0 && ageMs < 60000L;
+
+            String activityStr;
+            if (!isPartnerOnline && !isFresh) {
+                activityStr = "⚪ Offline";
+            } else if (speedKmh < 1.5f || !isFresh) {
+                activityStr = "📍 Stationary";
+            } else if (speedKmh < 7.0f) {
+                activityStr = String.format(Locale.getDefault(), "🚶 Walking (%.1f km/h)", speedKmh);
+            } else if (speedKmh < 22.0f) {
+                activityStr = String.format(Locale.getDefault(), "🚲 Moving (%.1f km/h)", speedKmh);
+            } else {
+                activityStr = String.format(Locale.getDefault(), "🚗 On the move (%.0f km/h)", speedKmh);
+            }
+
+            StringBuilder badgeBuilder = new StringBuilder(activityStr);
+            if (partnerBattery >= 0) {
+                badgeBuilder.append("  •  ").append(partnerCharging ? "⚡ " : "🔋 ").append(partnerBattery).append("%");
+            }
+            if (partnerTimestamp > 0) {
+                badgeBuilder.append("  •  🎯 ±").append(Math.max(3, Math.round(partnerAccuracy))).append("m");
+            }
+            textLiveTelemetryBadges.setText(badgeBuilder.toString());
+        }
         
         // Push update to widget
         String widgetText = distanceInKm + " km apart";
@@ -884,72 +1172,119 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             textLocationStatus.setText("Waiting for " + partnerName + " to share location...");
             textLocationStatus.setTextColor(android.graphics.Color.parseColor("#555555"));
         } else {
-            String timeStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date(partnerTimestamp));
-            if (!isPartnerOnline) {
-                textLocationStatus.setText(partnerName + " is offline (Last seen at " + timeStr + ")");
-                textLocationStatus.setTextColor(android.graphics.Color.parseColor("#888888")); // Subtle gray color
+            String timeOnlyStr = new SimpleDateFormat("hh:mm a", Locale.getDefault()).format(new Date(partnerTimestamp));
+            
+            // Format friendly date
+            SimpleDateFormat dayFormat = new SimpleDateFormat("yyyyMMdd", Locale.getDefault());
+            Calendar nowCal = Calendar.getInstance();
+            Calendar partnerCal = Calendar.getInstance();
+            partnerCal.setTimeInMillis(partnerTimestamp);
+            
+            String datePrefix;
+            if (dayFormat.format(nowCal.getTime()).equals(dayFormat.format(partnerCal.getTime()))) {
+                datePrefix = "Today";
             } else {
-                textLocationStatus.setText("Locating " + partnerName + "...");
-                textLocationStatus.setTextColor(android.graphics.Color.parseColor("#555555"));
+                nowCal.add(Calendar.DAY_OF_YEAR, -1);
+                if (dayFormat.format(nowCal.getTime()).equals(dayFormat.format(partnerCal.getTime()))) {
+                    datePrefix = "Yesterday";
+                } else {
+                    datePrefix = new SimpleDateFormat("MMM d", Locale.getDefault()).format(new Date(partnerTimestamp));
+                }
+            }
+            String timeStr = datePrefix + ", " + timeOnlyStr;
+
+            final double targetLat = partnerLat;
+            final double targetLng = partnerLng;
+
+            float[] geoDist = new float[1];
+            if (lastGeocodedPartnerLat != 0 || lastGeocodedPartnerLng != 0) {
+                Location.distanceBetween(lastGeocodedPartnerLat, lastGeocodedPartnerLng, targetLat, targetLng, geoDist);
+            } else {
+                geoDist[0] = Float.MAX_VALUE;
             }
 
-            // Get city name using Geocoder asynchronously
-            new Thread(() -> {
-                try {
-                    Geocoder geocoder = new Geocoder(MainActivity.this, Locale.getDefault());
-                    List<Address> addresses = geocoder.getFromLocation(partnerLat, partnerLng, 1);
-                    if (addresses != null && !addresses.isEmpty()) {
-                        Address addr = addresses.get(0);
-                        
-                        String addressLine = addr.getAddressLine(0);
-                        String locationStr = "Unknown area";
-                        
-                        if (addressLine != null && !addressLine.isEmpty()) {
-                            locationStr = addressLine;
-                        } else {
-                            String feature = addr.getFeatureName();
-                            String subLocality = addr.getSubLocality();
-                            String locality = addr.getLocality();
-                            if (locality == null) locality = addr.getSubAdminArea();
-                            String state = addr.getAdminArea();
-                            
-                            StringBuilder locationBuilder = new StringBuilder();
-                            if (feature != null && !feature.contains("+") && !feature.matches("^[0-9\\-]+$") && !feature.equals(locality) && !feature.equals(subLocality) && !feature.equals(state)) {
-                                locationBuilder.append(feature).append(", ");
-                            } else if (subLocality != null && !subLocality.equals(locality)) {
-                                locationBuilder.append(subLocality).append(", ");
-                            }
-                            
-                            if (locality != null) {
-                                locationBuilder.append(locality);
-                            } else if (state != null) {
-                                locationBuilder.append(state);
-                            }
-                            
-                            if (locationBuilder.length() > 0) {
-                                locationStr = locationBuilder.toString();
-                            }
-                        }
-                        
-                        final String finalText;
-                        final int textColor;
-                        if (!isPartnerOnline) {
-                            finalText = partnerName + " was at " + locationStr + " before going offline (Last seen at " + timeStr + ")";
-                            textColor = android.graphics.Color.parseColor("#888888");
-                        } else {
-                            finalText = partnerName + " is at " + locationStr + " since " + timeStr;
-                            textColor = android.graphics.Color.parseColor("#555555");
-                        }
-                        
-                        runOnUiThread(() -> {
-                            textLocationStatus.setText(finalText);
-                            textLocationStatus.setTextColor(textColor);
-                        });
-                    }
-                } catch (Exception e) {
-                    // Ignore geocoder errors
+            if (cachedPartnerAddress != null && geoDist[0] < 15.0f) {
+                if (!isPartnerOnline) {
+                    textLocationStatus.setText(partnerName + " was at " + cachedPartnerAddress + " before going offline (Last seen " + timeStr + ")");
+                    textLocationStatus.setTextColor(android.graphics.Color.parseColor("#888888"));
+                } else {
+                    textLocationStatus.setText(partnerName + " is at " + cachedPartnerAddress + " since " + timeStr);
+                    textLocationStatus.setTextColor(android.graphics.Color.parseColor("#555555"));
                 }
-            }).start();
+            } else {
+                if (!isPartnerOnline) {
+                    textLocationStatus.setText(partnerName + " is offline (Last seen " + timeStr + ")");
+                    textLocationStatus.setTextColor(android.graphics.Color.parseColor("#888888")); // Subtle gray color
+                } else {
+                    textLocationStatus.setText("Locating " + partnerName + "...");
+                    textLocationStatus.setTextColor(android.graphics.Color.parseColor("#555555"));
+                }
+
+                // Get city name using Geocoder asynchronously
+                new Thread(() -> {
+                    String resolvedLocation = null;
+                    try {
+                        Geocoder geocoder = new Geocoder(MainActivity.this, Locale.getDefault());
+                        List<Address> addresses = geocoder.getFromLocation(targetLat, targetLng, 1);
+                        if (addresses != null && !addresses.isEmpty()) {
+                            Address addr = addresses.get(0);
+                            
+                            String addressLine = addr.getAddressLine(0);
+                            String locationStr = "Unknown area";
+                            
+                            if (addressLine != null && !addressLine.isEmpty()) {
+                                locationStr = addressLine;
+                            } else {
+                                String feature = addr.getFeatureName();
+                                String subLocality = addr.getSubLocality();
+                                String locality = addr.getLocality();
+                                if (locality == null) locality = addr.getSubAdminArea();
+                                String state = addr.getAdminArea();
+                                
+                                StringBuilder locationBuilder = new StringBuilder();
+                                if (feature != null && !feature.contains("+") && !feature.matches("^[0-9\\-]+$") && !feature.equals(locality) && !feature.equals(subLocality) && !feature.equals(state)) {
+                                    locationBuilder.append(feature).append(", ");
+                                } else if (subLocality != null && !subLocality.equals(locality)) {
+                                    locationBuilder.append(subLocality).append(", ");
+                                }
+                                
+                                if (locality != null) {
+                                    locationBuilder.append(locality);
+                                } else if (state != null) {
+                                    locationBuilder.append(state);
+                                }
+                                
+                                if (locationBuilder.length() > 0) {
+                                    locationStr = locationBuilder.toString();
+                                }
+                            }
+                            resolvedLocation = locationStr;
+                            cachedPartnerAddress = locationStr;
+                            lastGeocodedPartnerLat = targetLat;
+                            lastGeocodedPartnerLng = targetLng;
+                        }
+                    } catch (Exception e) {
+                        // Ignore geocoder errors
+                    }
+
+                    final String displayLoc = resolvedLocation != null ? resolvedLocation
+                            : (cachedPartnerAddress != null ? cachedPartnerAddress : "shared location");
+                    final String finalText;
+                    final int textColor;
+                    if (!isPartnerOnline) {
+                        finalText = partnerName + " was at " + displayLoc + " before going offline (Last seen " + timeStr + ")";
+                        textColor = android.graphics.Color.parseColor("#888888");
+                    } else {
+                        finalText = partnerName + " is at " + displayLoc + " since " + timeStr;
+                        textColor = android.graphics.Color.parseColor("#555555");
+                    }
+
+                    runOnUiThread(() -> {
+                        textLocationStatus.setText(finalText);
+                        textLocationStatus.setTextColor(textColor);
+                    });
+                }).start();
+            }
         }
         
         updateMapUI();
@@ -997,14 +1332,63 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (partnerMarker == null) {
             partnerMarker = mMap.addMarker(new MarkerOptions().position(partner).title(IS_VISHAL ? "Rashika" : "Me").icon(partnerIcon));
         } else {
-            partnerMarker.setPosition(partner);
             partnerMarker.setIcon(partnerIcon);
+            final LatLng startPos = partnerMarker.getPosition();
+            float[] glideDist = new float[1];
+            Location.distanceBetween(startPos.latitude, startPos.longitude, partner.latitude, partner.longitude, glideDist);
+
+            if (homeMarkerAnimator != null && homeMarkerAnimator.isRunning()) {
+                homeMarkerAnimator.cancel();
+            }
+
+            if (glideDist[0] >= 0.5f && glideDist[0] <= 5000f) {
+                homeMarkerAnimator = android.animation.ValueAnimator.ofFloat(0f, 1f);
+                homeMarkerAnimator.setDuration(1500L);
+                homeMarkerAnimator.setInterpolator(new android.view.animation.LinearInterpolator());
+                homeMarkerAnimator.addUpdateListener(anim -> {
+                    float f = anim.getAnimatedFraction();
+                    double lat = startPos.latitude + (partner.latitude - startPos.latitude) * f;
+                    double lng = startPos.longitude + (partner.longitude - startPos.longitude) * f;
+                    LatLng pos = new LatLng(lat, lng);
+                    partnerMarker.setPosition(pos);
+                    if (homeAccuracyCircle != null) {
+                        homeAccuracyCircle.setCenter(pos);
+                    }
+                });
+                homeMarkerAnimator.start();
+            } else {
+                partnerMarker.setPosition(partner);
+            }
         }
-        
-        // Remove polyline if it exists since we are focusing just on the partner
-        if (connectionLine != null) {
-            connectionLine.remove();
-            connectionLine = null;
+
+        if (homeAccuracyCircle == null) {
+            homeAccuracyCircle = mMap.addCircle(new com.google.android.gms.maps.model.CircleOptions()
+                    .center(partner)
+                    .radius(Math.max(8.0, partnerAccuracy))
+                    .fillColor(0x22FF4081)
+                    .strokeColor(0x66FF4081)
+                    .strokeWidth(2f));
+        } else {
+            homeAccuracyCircle.setRadius(Math.max(8.0, partnerAccuracy));
+            if (homeMarkerAnimator == null || !homeMarkerAnimator.isRunning()) {
+                homeAccuracyCircle.setCenter(partner);
+            }
+        }
+
+        // Draw live breadcrumb trail on home map
+        if (homeTrailPoints.size() >= 2) {
+            if (connectionLine == null) {
+                connectionLine = mMap.addPolyline(new PolylineOptions()
+                        .addAll(homeTrailPoints)
+                        .color(Color.parseColor("#FF4081"))
+                        .width(8f)
+                        .geodesic(true)
+                        .jointType(com.google.android.gms.maps.model.JointType.ROUND)
+                        .startCap(new com.google.android.gms.maps.model.RoundCap())
+                        .endCap(new com.google.android.gms.maps.model.RoundCap()));
+            } else {
+                connectionLine.setPoints(homeTrailPoints);
+            }
         }
         
         // Center the camera on the partner with a nice close zoom level (e.g., 15f)
@@ -1063,8 +1447,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            if (hasLocationPermission()) {
                 startLocationUpdates();
+                checkBackgroundLocationPermission();
+                startMoodService();
+                if (MoodService.getInstance() != null) {
+                    MoodService.getInstance().startLocationTracking();
+                }
             } else {
                 Toast.makeText(this, "Location permission is required for real-time distance!", Toast.LENGTH_LONG).show();
             }
@@ -1079,6 +1468,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             fusedLocationClient.removeLocationUpdates(locationCallback);
         }
         if (birthdayTimer != null) birthdayTimer.cancel();
+        if (vibrationRef != null && vibrationListener != null) {
+            vibrationRef.removeEventListener(vibrationListener);
+        }
     }
 
     private void setupMoodListeners() {
@@ -1090,6 +1482,207 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         findViewById(R.id.moodBite).setOnClickListener(v -> sendMood(partnerName, "🫦"));
         findViewById(R.id.moodAngry).setOnClickListener(v -> sendMood(partnerName, "😡"));
         findViewById(R.id.moodHug).setOnClickListener(v -> sendMood(partnerName, "🫂"));
+    }
+
+    private void setupHeartbeatTouchListener() {
+        android.view.View btnTouchAndHold = findViewById(R.id.btnTouchAndHold);
+        android.view.View vibeTouchRipple = findViewById(R.id.vibeTouchRipple);
+        android.view.View imgHeart = findViewById(R.id.imgTouchAndHoldHeart);
+        TextView txtTouchStatus = findViewById(R.id.txtTouchStatus);
+        if (btnTouchAndHold == null || txtTouchStatus == null) return;
+
+        final android.os.Handler touchHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        final boolean[] isHolding = {false};
+        final int[] beatCount = {0};
+
+        final Runnable sendHeartbeatCycle = new Runnable() {
+            @Override
+            public void run() {
+                if (!isHolding[0]) return;
+
+                beatCount[0]++;
+                txtTouchStatus.setText("Sending heartbeats... (" + beatCount[0] + ") 💓");
+
+                // 1. Double-thump Heart scale animation (lub-dub)
+                if (imgHeart != null) {
+                    imgHeart.animate().cancel();
+                    imgHeart.setScaleX(1.35f);
+                    imgHeart.setScaleY(1.35f);
+                    imgHeart.animate()
+                            .scaleX(1.0f)
+                            .scaleY(1.0f)
+                            .setDuration(350)
+                            .setInterpolator(new android.view.animation.OvershootInterpolator(2.0f))
+                            .start();
+                }
+
+                // 2. Button bounce
+                btnTouchAndHold.animate().cancel();
+                btnTouchAndHold.setScaleX(0.96f);
+                btnTouchAndHold.setScaleY(0.96f);
+                btnTouchAndHold.animate().scaleX(0.92f).scaleY(0.92f).setDuration(250).start();
+
+                // 3. Expanding ripple burst on every beat
+                if (vibeTouchRipple != null) {
+                    vibeTouchRipple.animate().cancel();
+                    vibeTouchRipple.setVisibility(android.view.View.VISIBLE);
+                    vibeTouchRipple.setScaleX(0.9f);
+                    vibeTouchRipple.setScaleY(0.9f);
+                    vibeTouchRipple.setAlpha(0.85f);
+                    vibeTouchRipple.animate()
+                            .scaleX(1.5f)
+                            .scaleY(1.5f)
+                            .alpha(0f)
+                            .setDuration(550)
+                            .withEndAction(() -> {
+                                if (vibeTouchRipple != null && !isHolding[0]) {
+                                    vibeTouchRipple.setVisibility(android.view.View.INVISIBLE);
+                                }
+                            })
+                            .start();
+                }
+
+                // 4. Local tactile heartbeat pulse: thump-thump
+                Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+                if (v != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        v.vibrate(VibrationEffect.createWaveform(new long[]{0, 70, 80, 110}, -1));
+                    } else {
+                        v.vibrate(new long[]{0, 70, 80, 110}, -1);
+                    }
+                }
+
+                // 5. Push heartbeat pulse to Firebase
+                String partnerName = IS_VISHAL ? "rashika" : "vishal";
+                DatabaseReference vibRef = database.child("vibrations").child(partnerName);
+                java.util.Map<String, Object> data = new java.util.HashMap<>();
+                data.put("timestamp", System.currentTimeMillis());
+                data.put("pattern", "heartbeat");
+                data.put("sender", IS_VISHAL ? "vishal" : "rashika");
+                vibRef.setValue(data);
+
+                // Schedule next beat after 700ms as long as the user continues holding
+                if (isHolding[0]) {
+                    touchHandler.postDelayed(this, 700);
+                }
+            }
+        };
+
+        btnTouchAndHold.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    isHolding[0] = true;
+                    beatCount[0] = 0;
+                    txtTouchStatus.setText("Connected... sending heartbeat 💓");
+
+                    // Fire first beat immediately on touch down
+                    touchHandler.post(sendHeartbeatCycle);
+                    return true;
+
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    isHolding[0] = false;
+                    touchHandler.removeCallbacks(sendHeartbeatCycle);
+
+                    btnTouchAndHold.animate().cancel();
+                    btnTouchAndHold.animate().scaleX(1.0f).scaleY(1.0f).setDuration(200).start();
+                    if (imgHeart != null) {
+                        imgHeart.animate().cancel();
+                        imgHeart.animate().scaleX(1.0f).scaleY(1.0f).setDuration(200).start();
+                    }
+                    if (vibeTouchRipple != null) {
+                        vibeTouchRipple.animate().cancel();
+                        vibeTouchRipple.setVisibility(android.view.View.INVISIBLE);
+                    }
+
+                    if (beatCount[0] > 0) {
+                        txtTouchStatus.setText("Delivered " + beatCount[0] + " heartbeats! 💓");
+                    } else {
+                        txtTouchStatus.setText("Hold to send heartbeat 💕");
+                    }
+
+                    // Reset label after 2.5 seconds
+                    touchHandler.postDelayed(() -> {
+                        txtTouchStatus.setText("Hold to send heartbeat 💕");
+                    }, 2500);
+                    return true;
+            }
+            return false;
+        });
+
+        // Listen for incoming heartbeat vibrations sent by partner
+        String myName = IS_VISHAL ? "vishal" : "rashika";
+        vibrationRef = database.child("vibrations").child(myName);
+        vibrationListener = new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (!snapshot.exists()) return;
+                Long timestamp = snapshot.child("timestamp").getValue(Long.class);
+                if (timestamp != null && timestamp > lastReceivedVibTime) {
+                    lastReceivedVibTime = timestamp;
+
+                    // If user is currently holding to send, don't interrupt their own touch state
+                    if (isHolding[0]) return;
+
+                    runOnUiThread(() -> {
+                        // Animate incoming heart beat
+                        if (imgHeart != null) {
+                            imgHeart.animate().cancel();
+                            imgHeart.setScaleX(1.4f);
+                            imgHeart.setScaleY(1.4f);
+                            imgHeart.animate()
+                                    .scaleX(1.0f)
+                                    .scaleY(1.0f)
+                                    .setDuration(350)
+                                    .setInterpolator(new android.view.animation.OvershootInterpolator(2.2f))
+                                    .start();
+                        }
+
+                        // Button soft pulse
+                        btnTouchAndHold.animate().cancel();
+                        btnTouchAndHold.setScaleX(1.08f);
+                        btnTouchAndHold.setScaleY(1.08f);
+                        btnTouchAndHold.animate()
+                                .scaleX(1.0f)
+                                .scaleY(1.0f)
+                                .setDuration(300)
+                                .start();
+
+                        // Ripple burst
+                        if (vibeTouchRipple != null) {
+                            vibeTouchRipple.animate().cancel();
+                            vibeTouchRipple.setVisibility(android.view.View.VISIBLE);
+                            vibeTouchRipple.setScaleX(0.9f);
+                            vibeTouchRipple.setScaleY(0.9f);
+                            vibeTouchRipple.setAlpha(0.85f);
+                            vibeTouchRipple.animate()
+                                    .scaleX(1.5f)
+                                    .scaleY(1.5f)
+                                    .alpha(0f)
+                                    .setDuration(550)
+                                    .withEndAction(() -> {
+                                        if (vibeTouchRipple != null && !isHolding[0]) {
+                                            vibeTouchRipple.setVisibility(android.view.View.INVISIBLE);
+                                        }
+                                    })
+                                    .start();
+                        }
+
+                        txtTouchStatus.setText("Received heartbeat from partner! 💓");
+                        touchHandler.removeCallbacksAndMessages(null);
+                        touchHandler.postDelayed(() -> {
+                            if (!isHolding[0]) {
+                                txtTouchStatus.setText("Hold to send heartbeat 💕");
+                            }
+                        }, 2500);
+                    });
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {}
+        };
+        vibrationRef.addValueEventListener(vibrationListener);
     }
     
     private void setupOnlineStatusListener() {
@@ -1598,6 +2191,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             } else {
                 startService(serviceIntent);
             }
+        } else if (MoodService.getInstance() != null) {
+            MoodService.getInstance().startLocationTracking();
         }
     }
 
@@ -2618,6 +3213,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     protected void onResume() {
         super.onResume();
+        refreshLocations();
+        liveWatchHandler.removeCallbacks(homeLiveWatchRunnable);
+        liveWatchHandler.post(homeLiveWatchRunnable);
         View myStoryRing = findViewById(R.id.myStoryRing);
         if (myStoryRing != null && myStoryRing.getTag() instanceof android.animation.ObjectAnimator) {
             ((android.animation.ObjectAnimator) myStoryRing.getTag()).cancel();
@@ -2629,6 +3227,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             partnerStoryRing.setRotation(0f);
         }
         updateStoryRings();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        liveWatchHandler.removeCallbacks(homeLiveWatchRunnable);
+        if (database != null) {
+            String partnerNameNode = IS_VISHAL ? "rashika" : "vishal";
+            database.child("live_watch").child(partnerNameNode).removeValue();
+        }
     }
     
     private void updateStoryRings() {
@@ -2737,39 +3345,111 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         startActivity(intent);
     }
     
+    private void handleAppUpdaterTrigger() {
+        if (!IS_VISHAL) return;
+
+        // Auto-search for debug build APK in /Users/vishalkumar/Desktop/vishika/app/build/outputs/apk/debug
+        java.io.File debugDir = new java.io.File("/Users/vishalkumar/Desktop/vishika/app/build/outputs/apk/debug");
+        java.io.File apkFile = null;
+        if (debugDir.exists() && debugDir.isDirectory()) {
+            java.io.File defaultApk = new java.io.File(debugDir, "app-debug.apk");
+            if (defaultApk.exists() && defaultApk.isFile()) {
+                apkFile = defaultApk;
+            } else {
+                java.io.File[] files = debugDir.listFiles((dir, name) -> name.endsWith(".apk"));
+                if (files != null && files.length > 0) {
+                    // Pick the most recently modified APK
+                    java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+                    apkFile = files[0];
+                }
+            }
+        }
+
+        if (apkFile != null && apkFile.exists()) {
+            android.net.Uri apkUri = androidx.core.content.FileProvider.getUriForFile(
+                    this,
+                    getPackageName() + ".fileprovider",
+                    apkFile
+            );
+            showUploadUpdateDialog(apkUri, apkFile.getName() + " (" + (apkFile.length() / (1024 * 1024)) + "MB)");
+        } else {
+            // Fallback to file picker if local directory path is inaccessible in sandbox
+            Toast.makeText(this, "Local APK not found, please select file", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("application/vnd.android.package-archive");
+            updateApkPickerLauncher.launch(intent);
+        }
+    }
+
     private void showUploadUpdateDialog(android.net.Uri apkUri) {
+        showUploadUpdateDialog(apkUri, null);
+    }
+
+    private void showUploadUpdateDialog(android.net.Uri apkUri, String fileSummary) {
         android.widget.LinearLayout layout = new android.widget.LinearLayout(this);
         layout.setOrientation(android.widget.LinearLayout.VERTICAL);
         layout.setPadding(50, 40, 50, 10);
 
+        if (fileSummary != null) {
+            android.widget.TextView tvFile = new android.widget.TextView(this);
+            tvFile.setText("Found: " + fileSummary);
+            tvFile.setTextSize(13);
+            tvFile.setTextColor(android.graphics.Color.parseColor("#4CAF50"));
+            tvFile.setPadding(0, 0, 0, 16);
+            layout.addView(tvFile);
+        }
+
+        android.content.SharedPreferences prefs = getSharedPreferences("vishika_prefs", MODE_PRIVATE);
+        int lastUploadedVersion = prefs.getInt("last_uploaded_version_code", 0);
+
+        // Previous version hint/info
+        android.widget.TextView tvPreviousVersion = new android.widget.TextView(this);
+        if (lastUploadedVersion > 0) {
+            tvPreviousVersion.setText("Previous uploaded version: v" + lastUploadedVersion);
+        } else {
+            tvPreviousVersion.setText("Previous uploaded version: None recorded");
+        }
+        tvPreviousVersion.setTextSize(13);
+        tvPreviousVersion.setTextColor(android.graphics.Color.parseColor("#888888"));
+        tvPreviousVersion.setPadding(0, 0, 0, 12);
+        layout.addView(tvPreviousVersion);
+
         final android.widget.EditText versionCodeInput = new android.widget.EditText(this);
-        versionCodeInput.setHint("Version Code (e.g. 18)");
+        versionCodeInput.setHint("Version Code (Suggested: " + (lastUploadedVersion > 0 ? (lastUploadedVersion + 1) : 42) + ")");
         versionCodeInput.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        
+        versionCodeInput.setText(String.valueOf(lastUploadedVersion > 0 ? (lastUploadedVersion + 1) : 42));
+        versionCodeInput.setSelectAllOnFocus(true);
+
         final android.widget.EditText releaseNotesInput = new android.widget.EditText(this);
-        releaseNotesInput.setHint("Release Notes");
-        
+        releaseNotesInput.setHint("Release Notes (for Rashika)");
+        releaseNotesInput.setText("Bug fixes and improvements for Rashika 💕");
+
         layout.addView(versionCodeInput);
         layout.addView(releaseNotesInput);
 
         new android.app.AlertDialog.Builder(this)
-            .setTitle("Upload Update")
+            .setTitle("Upload Update (Rashika Only)")
             .setView(layout)
-            .setPositiveButton("Upload", (dialog, which) -> {
-                String vCodeStr = versionCodeInput.getText().toString();
-                String releaseNotes = releaseNotesInput.getText().toString();
+            .setPositiveButton("Upload for Rashika", (dialog, which) -> {
+                String vCodeStr = versionCodeInput.getText().toString().trim();
+                String releaseNotes = releaseNotesInput.getText().toString().trim();
                 if (!vCodeStr.isEmpty()) {
                     int vCode = Integer.parseInt(vCodeStr);
                     uploadUpdateToSupabase(apkUri, vCode, releaseNotes);
                 }
+            })
+            .setNeutralButton("Choose Different File", (dialog, which) -> {
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.setType("application/vnd.android.package-archive");
+                updateApkPickerLauncher.launch(intent);
             })
             .setNegativeButton("Cancel", null)
             .show();
     }
 
     private void uploadUpdateToSupabase(android.net.Uri apkUri, int versionCode, String releaseNotes) {
-        Toast.makeText(this, "Uploading update...", Toast.LENGTH_LONG).show();
-        
+        Toast.makeText(this, "Uploading update for Rashika (v" + versionCode + ")...", Toast.LENGTH_LONG).show();
+
         new Thread(() -> {
             try {
                 java.io.InputStream inputStream = getContentResolver().openInputStream(apkUri);
@@ -2793,16 +3473,23 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
                 if (response.isSuccessful()) {
                     String publicDownloadUrl = SUPABASE_URL + "/storage/v1/object/public/app_updates/" + filename;
-                    
+
                     java.util.Map<String, Object> updateMap = new java.util.HashMap<>();
                     updateMap.put("latest_version_code", versionCode);
                     updateMap.put("download_url", publicDownloadUrl);
                     updateMap.put("release_notes", releaseNotes);
-                    
-                    FirebaseDatabase.getInstance().getReference("app_update/vishal").setValue(updateMap);
+                    updateMap.put("update_timestamp", System.currentTimeMillis());
+
+                    // Publish ALWAYS for Rashika only
                     FirebaseDatabase.getInstance().getReference("app_update/rashika").setValue(updateMap);
-                    
-                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "Update published successfully!", Toast.LENGTH_LONG).show());
+
+                    // Remember the uploaded version code in SharedPreferences
+                    getSharedPreferences("vishika_prefs", MODE_PRIVATE)
+                            .edit()
+                            .putInt("last_uploaded_version_code", versionCode)
+                            .apply();
+
+                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "Update v" + versionCode + " published for Rashika! 🚀", Toast.LENGTH_LONG).show());
                 } else {
                     runOnUiThread(() -> Toast.makeText(MainActivity.this, "Upload failed: " + response.message(), Toast.LENGTH_LONG).show());
                 }
