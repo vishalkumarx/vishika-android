@@ -287,19 +287,9 @@ public class LiveTrackingActivity extends AppCompatActivity implements OnMapRead
     }
 
     private void redrawTrailPolyline() {
-        if (mMap == null || trailPoints.size() < 2) return;
-        if (liveTrailPolyline == null) {
-            PolylineOptions opts = new PolylineOptions()
-                    .addAll(trailPoints)
-                    .color(Color.parseColor("#FF4081"))
-                    .width(10f)
-                    .geodesic(true)
-                    .jointType(JointType.ROUND)
-                    .startCap(new RoundCap())
-                    .endCap(new RoundCap());
-            liveTrailPolyline = mMap.addPolyline(opts);
-        } else {
-            liveTrailPolyline.setPoints(trailPoints);
+        if (liveTrailPolyline != null) {
+            liveTrailPolyline.remove();
+            liveTrailPolyline = null;
         }
     }
 

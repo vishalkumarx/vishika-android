@@ -10,6 +10,9 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.BroadcastReceiver;
+import android.os.BatteryManager;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.os.Build;
@@ -224,6 +227,7 @@ public class MoodService extends Service {
         listenForPartnerOnlineStatus();
         listenForSurpriseBox();
         listenForVibrations();
+        setupSleepDetection();
         
         setDrawingOverlayVisible(true);
 
@@ -1330,6 +1334,15 @@ public class MoodService extends Service {
         instance = null;
         stopLocationTracking();
         dismissHeartbeatOverlay();
+        if (screenStateReceiver != null) {
+            try {
+                unregisterReceiver(screenStateReceiver);
+            } catch (Exception ignored) {}
+            screenStateReceiver = null;
+        }
+        if (sleepCheckHandler != null && periodicSleepEvaluator != null) {
+            sleepCheckHandler.removeCallbacks(periodicSleepEvaluator);
+        }
         if (moodListener != null) {
             mDatabase.child(myDbNode).removeEventListener(moodListener);
         }
@@ -1879,4 +1892,146 @@ public class MoodService extends Service {
         }
     }
 
+    // ==========================================
+    // --- SLEEP & AWAKE DETECTION SYSTEM ---
+    // ==========================================
+    private BroadcastReceiver screenStateReceiver = null;
+    private android.os.Handler sleepCheckHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable periodicSleepEvaluator = null;
+    private long screenOffTimestamp = 0;
+    private boolean isCurrentlyMarkedSleeping = false;
+
+    private void setupSleepDetection() {
+        if (screenStateReceiver != null) return;
+
+        android.content.SharedPreferences prefs = getSharedPreferences("vishika_sleep", Context.MODE_PRIVATE);
+        screenOffTimestamp = prefs.getLong("last_screen_off", 0);
+
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(Intent.ACTION_SCREEN_OFF);
+        filter.addAction(Intent.ACTION_SCREEN_ON);
+        filter.addAction(Intent.ACTION_USER_PRESENT);
+        filter.addAction(Intent.ACTION_POWER_CONNECTED);
+        filter.addAction(Intent.ACTION_POWER_DISCONNECTED);
+
+        screenStateReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                if (intent == null || intent.getAction() == null) return;
+                String action = intent.getAction();
+                long now = System.currentTimeMillis();
+
+                if (Intent.ACTION_SCREEN_OFF.equals(action)) {
+                    screenOffTimestamp = now;
+                    getSharedPreferences("vishika_sleep", Context.MODE_PRIVATE)
+                            .edit()
+                            .putLong("last_screen_off", screenOffTimestamp)
+                            .apply();
+                    evaluateSleepState();
+                } else if (Intent.ACTION_USER_PRESENT.equals(action) || Intent.ACTION_SCREEN_ON.equals(action)) {
+                    // User is actively unlocking/using the phone -> definitively Awake
+                    markUserAwake(now);
+                } else if (Intent.ACTION_POWER_CONNECTED.equals(action) || Intent.ACTION_POWER_DISCONNECTED.equals(action)) {
+                    evaluateSleepState();
+                }
+            }
+        };
+
+        registerReceiver(screenStateReceiver, filter);
+
+        // Run evaluator every 5 minutes to detect when 30+ min sleep threshold has elapsed
+        periodicSleepEvaluator = new Runnable() {
+            @Override
+            public void run() {
+                evaluateSleepState();
+                sleepCheckHandler.postDelayed(this, 5 * 60 * 1000L);
+            }
+        };
+        sleepCheckHandler.postDelayed(periodicSleepEvaluator, 60 * 1000L);
+
+        // Initial evaluation on service startup
+        evaluateSleepState();
+    }
+
+    private void markUserAwake(long activeTimestamp) {
+        screenOffTimestamp = 0;
+        isCurrentlyMarkedSleeping = false;
+        getSharedPreferences("vishika_sleep", Context.MODE_PRIVATE)
+                .edit()
+                .putLong("last_screen_off", 0)
+                .putLong("last_active", activeTimestamp)
+                .apply();
+
+        DatabaseReference sleepRef = FirebaseDatabase.getInstance().getReference()
+                .child("status").child(myDbNode);
+
+        java.util.Map<String, Object> updates = new java.util.HashMap<>();
+        updates.put("is_sleeping", false);
+        updates.put("last_active", activeTimestamp);
+        sleepRef.updateChildren(updates);
+    }
+
+    private void evaluateSleepState() {
+        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+        boolean isScreenOn = pm != null && pm.isInteractive();
+        long now = System.currentTimeMillis();
+
+        if (isScreenOn) {
+            if (isCurrentlyMarkedSleeping) {
+                markUserAwake(now);
+            }
+            return;
+        }
+
+        if (screenOffTimestamp == 0) {
+            screenOffTimestamp = now;
+        }
+
+        long screenOffDurationMs = now - screenOffTimestamp;
+
+        // Check if current local time is in the typical nighttime / nap window: 10:30 PM to 10:30 AM
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        int hour = cal.get(java.util.Calendar.HOUR_OF_DAY);
+        int minute = cal.get(java.util.Calendar.MINUTE);
+        int timeInMinutes = hour * 60 + minute;
+
+        // 10:30 PM is 22 * 60 + 30 = 1350; 10:30 AM is 10 * 60 + 30 = 630
+        boolean isNightTimeWindow = (timeInMinutes >= 1350 || timeInMinutes <= 630);
+
+        // Check if phone is plugged in to charging
+        IntentFilter ifilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+        Intent batteryStatus = registerReceiver(null, ifilter);
+        int status = batteryStatus != null ? batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1) : -1;
+        boolean isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                             status == BatteryManager.BATTERY_STATUS_FULL;
+
+        // Sleep threshold:
+        // - At night when charging: screen off for > 20 minutes
+        // - At night on battery: screen off for > 35 minutes
+        // - Daytime nap: screen off for > 60 minutes while charging
+        boolean qualifiesAsSleeping = false;
+        if (isNightTimeWindow) {
+            if (isCharging && screenOffDurationMs >= (20 * 60 * 1000L)) {
+                qualifiesAsSleeping = true;
+            } else if (screenOffDurationMs >= (35 * 60 * 1000L)) {
+                qualifiesAsSleeping = true;
+            }
+        } else if (isCharging && screenOffDurationMs >= (60 * 60 * 1000L)) {
+            qualifiesAsSleeping = true;
+        }
+
+        if (qualifiesAsSleeping && !isCurrentlyMarkedSleeping) {
+            isCurrentlyMarkedSleeping = true;
+            DatabaseReference sleepRef = FirebaseDatabase.getInstance().getReference()
+                    .child("status").child(myDbNode);
+
+            java.util.Map<String, Object> updates = new java.util.HashMap<>();
+            updates.put("is_sleeping", true);
+            updates.put("sleep_since", screenOffTimestamp);
+            updates.put("last_active", screenOffTimestamp);
+            sleepRef.updateChildren(updates);
+        } else if (!qualifiesAsSleeping && isCurrentlyMarkedSleeping) {
+            markUserAwake(now);
+        }
+    }
 }

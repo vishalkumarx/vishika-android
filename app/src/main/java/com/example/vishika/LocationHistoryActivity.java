@@ -265,19 +265,6 @@ public class LocationHistoryActivity extends AppCompatActivity implements OnMapR
             pathPoints.add(new LatLng(model.getLat(), model.getLng()));
         }
 
-        // Draw direct, smooth path polyline connecting filtered locations
-        if (pathPoints.size() > 1) {
-            PolylineOptions polylineOptions = new PolylineOptions()
-                    .addAll(pathPoints)
-                    .color(Color.parseColor("#E91E63")) // Vibrant, clean rose pink
-                    .width(8f)
-                    .geodesic(true)
-                    .jointType(com.google.android.gms.maps.model.JointType.ROUND)
-                    .startCap(new com.google.android.gms.maps.model.RoundCap())
-                    .endCap(new com.google.android.gms.maps.model.RoundCap());
-            mMap.addPolyline(polylineOptions);
-        }
-
         // Determine which points to add markers for (Start, End, and max 3 intermediate points)
         List<Integer> markerIndices = new ArrayList<>();
         if (pathPoints.size() > 0) markerIndices.add(0);

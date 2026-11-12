@@ -92,7 +92,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
     private static final int OVERLAY_PERMISSION_REQUEST_CODE = 2;
-    public static final boolean IS_VISHAL = false    ;
+    public static final boolean IS_VISHAL = true    ;
     
     private String myDbNode;
     private String partnerDbNode;
@@ -1375,20 +1375,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         }
 
-        // Draw live breadcrumb trail on home map
-        if (homeTrailPoints.size() >= 2) {
-            if (connectionLine == null) {
-                connectionLine = mMap.addPolyline(new PolylineOptions()
-                        .addAll(homeTrailPoints)
-                        .color(Color.parseColor("#FF4081"))
-                        .width(8f)
-                        .geodesic(true)
-                        .jointType(com.google.android.gms.maps.model.JointType.ROUND)
-                        .startCap(new com.google.android.gms.maps.model.RoundCap())
-                        .endCap(new com.google.android.gms.maps.model.RoundCap()));
-            } else {
-                connectionLine.setPoints(homeTrailPoints);
-            }
+        if (connectionLine != null) {
+            connectionLine.remove();
+            connectionLine = null;
         }
         
         // Center the camera on the partner with a nice close zoom level (e.g., 15f)
