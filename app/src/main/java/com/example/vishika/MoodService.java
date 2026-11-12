@@ -1401,7 +1401,13 @@ public class MoodService extends Service {
             
             mediaPlayer.setVolume(1.0f, 1.0f);
             
-            if (url.startsWith("android.resource://")) {
+            if (url.contains("audio_1") || url.contains("2131820544")) {
+                mediaPlayer.setDataSource(getApplicationContext(), android.net.Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.audio_1));
+            } else if (url.contains("audio_2") || url.contains("2131820545")) {
+                mediaPlayer.setDataSource(getApplicationContext(), android.net.Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.audio_2));
+            } else if (url.contains("audio_3") || url.contains("2131820546")) {
+                mediaPlayer.setDataSource(getApplicationContext(), android.net.Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.audio_3));
+            } else if (url.startsWith("android.resource://")) {
                 mediaPlayer.setDataSource(getApplicationContext(), android.net.Uri.parse(url));
             } else {
                 mediaPlayer.setDataSource(url);
